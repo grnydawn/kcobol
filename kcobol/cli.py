@@ -14,6 +14,9 @@ from .kcobol import on_main_command, on_extract_command
 from .project import initialize_project
 from .util import initialize_logging
 
+
+logger = logging.getLogger('kcobol')
+
 @click.group(invoke_without_command=True)
 @click.option(u'--debug/--no-debug', default=False)
 @click.option(u'--output', u'-o', default=os.getcwd(),
@@ -45,9 +48,11 @@ def main(ctx, debug, output):
 def extract(ctx, target, clean, build, run):
     """extract a kerel from Cobol source codes."""
 
-    logging.info("Starting extract")
+    logger.info("Starting extract")
     retcode = on_extract_command(ctx.params)
-    logging.info("Exiting extract")
+    logger.info("Exiting extract")
+
+    logging.shutdown()
 
     return retcode
 

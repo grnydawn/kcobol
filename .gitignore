@@ -105,6 +105,8 @@ ENV/
 
 # kcobol
 .kcobol
+kcobol.log
 
 # pytest
 .pytest_cache
+

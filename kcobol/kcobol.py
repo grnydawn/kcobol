@@ -10,6 +10,8 @@ import click
 from .config import read_config, config
 from .reader import read_source
 
+logger = logging.getLogger('kcobol')
+
 def on_main_command(opts):
 
     # save command-line options in config
