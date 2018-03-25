@@ -3,6 +3,7 @@ from __future__ import (absolute_import, division,
                         print_function)
 from builtins import *
 
+import re
 import logging
 
 from .config import config
@@ -10,6 +11,14 @@ from .compiler import get_compiler
 from .util import runcmd
 
 logger = logging.getLogger('kcobol')
+
+_pid_re = re.compile(r'(?P<pid>\d+)')
+
+def _get_pid(line):
+    pid_search = _pid_re.search(line)
+    if pid_search:
+        return pid_search.group('pid')
+    return None
 
 def survey_application():
 
@@ -39,15 +48,26 @@ def survey_application():
         # check unfinished
         pos_unfinished = line.rfind("<unfinished ...>")
         if pos_unfinished > 0:
-            import pdb; pdb.set_trace()
+            pos_execve = line.find("execve")
+            if pos_execve > 0:
+                pid = _get_pid(line[:pos_execve])
+                if pid:
+                    if pid in unfinished:
+                        import pdb; pdb.set_trace()
+                    else:
+                        unfinished[pid] = line[:pos_unfinished]
             continue
 
         # check resumed
         pos_resumed = line.find("resumed>")
         if pos_resumed > 0:
-            import pdb; pdb.set_trace()
-            # find unfinished matching task
-            # append to queue
+            pid = _get_pid(line[:pos_resumed])
+            if pid:
+                if pid in unfinished:
+                    queue.append(unfinished[pid]+line[pos_resumed+8:])
+                    del unfinished[pid]
+                else:
+                    import pdb; pdb.set_trace()
 
         queue.append(line)
 

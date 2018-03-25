@@ -38,5 +38,5 @@ def on_extract_command(opts):
 
     # writer
 
-    import pdb; pdb.set_trace()
+    #import pdb; pdb.set_trace()
     return 0
