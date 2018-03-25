@@ -11,12 +11,19 @@ from .compiler import get_compiler
 from .util import runcmd
 
 _pid_re = re.compile(r'(?P<pid>\d+)')
+_exitno_re = re.compile(r'(?P<exitno>\d+)')
 
 def _get_pid(line):
     pid_search = _pid_re.search(line)
     if pid_search:
         return pid_search.group('pid')
     return None
+
+def _get_exitno(line):
+    exitno_match = _exitno_re.match(line.lstrip())
+    if exitno_match:
+        return exitno_match.group('exitno')
+    return '-1'
 
 def survey_application():
 
@@ -76,21 +83,25 @@ def survey_application():
         # process line
         pos_execve = line.find("execve")
         if pos_execve > 0:
+            exitno = '-1'
             pos_equal = line.rfind("=")
+            if pos_equal > 0:
+                exitno = _get_exitno(line[pos_equal+1:])
 
-            cmd, args, envs = eval(line[pos_execve+6:pos_equal])
+            if exitno == '0':
+                cmd, args, envs = eval(line[pos_execve+6:pos_equal])
 
-            # get $PWD
-            pwd = None
-            for env in envs:
-                if env.startswith("PWD="):
-                    pwd = env[4:]
-                    break
+                # get $PWD
+                pwd = None
+                for env in envs:
+                    if env.startswith("PWD="):
+                        pwd = env[4:]
+                        break
 
-            # get compiler
-            compiler = get_compiler(cmd, pwd, args)
+                # get compiler
+                compiler = get_compiler(cmd, pwd, args)
 
-            if compiler is not None:
-                config['strace/compile/%s'%compiler.source] = compiler
+                if compiler is not None:
+                    config['strace/compile/%s'%compiler.source] = compiler
 
     logging.debug('Leaving "survey_application"')
