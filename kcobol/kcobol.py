@@ -10,9 +10,8 @@ import click
 from .config import read_config, config
 from .reader import read_source
 
-logger = logging.getLogger('kcobol')
-
 def on_main_command(opts):
+    logging.debug('Entering "on_main_command"')
 
     # save command-line options in config
     for k, v in opts.items():
@@ -21,9 +20,11 @@ def on_main_command(opts):
     # read configuration file
     read_config()
 
+    logging.debug('Leaving "on_main_command"')
     return 0
 
 def on_extract_command(opts):
+    logging.debug('Entering "on_extract_command"')
 
     # save command-line options in config
     for k, v in opts.items():
@@ -39,4 +40,5 @@ def on_extract_command(opts):
     # writer
 
     #import pdb; pdb.set_trace()
+    logging.debug('Leaving "on_extract_command"')
     return 0

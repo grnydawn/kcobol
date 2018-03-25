@@ -15,8 +15,6 @@ from .project import initialize_project
 from .util import initialize_logging
 
 
-logger = logging.getLogger('kcobol')
-
 @click.group(invoke_without_command=True)
 @click.option(u'--debug/--no-debug', default=False)
 @click.option(u'--output', u'-o', default=os.getcwd(),
@@ -28,8 +26,9 @@ def main(ctx, debug, output):
     if ctx.invoked_subcommand is None:
         click.echo(ctx.get_help())
     else:
-        ctx.params['subcommand'] = ctx.invoked_subcommand
+        ctx.params['subcommand'] = subcmd = ctx.invoked_subcommand
         initialize_logging(ctx.params[u'output'])
+        logging.info('==== Starting %s ====' % subcmd)
         retcode = on_main_command(ctx.params)
         if retcode == 0:
             initialize_project()
@@ -48,15 +47,10 @@ def main(ctx, debug, output):
 def extract(ctx, target, clean, build, run):
     """extract a kerel from Cobol source codes."""
 
-    logger.info("Starting extract")
-    retcode = on_extract_command(ctx.params)
-    logger.info("Exiting extract")
+    return on_extract_command(ctx.params)
 
-    logging.shutdown()
-
-    return retcode
-
+# subcommands
 main.add_command(extract)
 
 if __name__ == u"__main__":
-    sys.exit(main())  # pragma: no cover
+    sys.exit(main())

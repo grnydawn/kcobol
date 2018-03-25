@@ -8,7 +8,7 @@ import subprocess
 import logging
 import click
 
-logger = logging.getLogger('kcobol')
+#logger = logging.getLogger('kcobol')
 
 def exit(exitno=0, msg="", usage=False):
 
@@ -16,9 +16,9 @@ def exit(exitno=0, msg="", usage=False):
         prefix = u"INFO: " if exitno == 0 else u"ERROR: "
         click.echo(prefix+msg)
     if exitno < 0:
-        logger.critical(msg)
+        logging.critical(msg)
     else:
-        logger.info(msg)
+        logging.info(msg)
     sys.exit(exitno)
 
 def runcmd(cmd, cwd=None, env=None):
@@ -33,17 +33,22 @@ def runcmd(cmd, cwd=None, env=None):
 
 def initialize_logging(outdir):
 
-    formatter = logging.Formatter('%(levelname)s: %(message)s')
+    # root logger
+    logger = logging.getLogger()
+    logger.setLevel(logging.DEBUG)
+
+    shortfmt = logging.Formatter('%(levelname)s: %(message)s')
+    longfmt = logging.Formatter('%(levelname)-8s [%(filename)s:%(lineno)s] %(message)s')
 
     fh = logging.FileHandler("%s/kcobol.log"%outdir, mode='w')
-    fh.setFormatter(formatter)
+    fh.setFormatter(longfmt)
     fh.setLevel(logging.DEBUG)
     #fh.setLevel(logging.WARNING)
 
     ch = logging.StreamHandler()
+    ch.setFormatter(shortfmt)
     ch.setLevel(logging.DEBUG)
     #ch.setLevel(logging.ERROR)
-    ch.setFormatter(formatter)
 
     logger.addHandler(fh)
     logger.addHandler(ch)

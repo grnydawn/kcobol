@@ -10,8 +10,6 @@ from .config import config
 from .compiler import get_compiler
 from .util import runcmd
 
-logger = logging.getLogger('kcobol')
-
 _pid_re = re.compile(r'(?P<pid>\d+)')
 
 def _get_pid(line):
@@ -21,6 +19,8 @@ def _get_pid(line):
     return None
 
 def survey_application():
+
+    logging.debug('Entering "survey_application"')
 
     # clean
     for line in runcmd(config['opts/extract/clean']):
@@ -35,8 +35,6 @@ def survey_application():
 
     strace_cmd = 'strace -f -q -s 100000 -e trace=execve -v -- $SHELL -c "%s"'
     for line in runcmd(strace_cmd%config['opts/extract/build']):
-
-        queue = []
 
         # check killed
         pos_killed = line.find("killed by")
@@ -56,6 +54,8 @@ def survey_application():
                         import pdb; pdb.set_trace()
                     else:
                         unfinished[pid] = line[:pos_unfinished]
+                else:
+                    import pdb; pdb.set_trace()
             continue
 
         # check resumed
@@ -64,30 +64,33 @@ def survey_application():
             pid = _get_pid(line[:pos_resumed])
             if pid:
                 if pid in unfinished:
-                    queue.append(unfinished[pid]+line[pos_resumed+8:])
+                    line = unfinished[pid]+line[pos_resumed+8:]
                     del unfinished[pid]
                 else:
                     import pdb; pdb.set_trace()
+                    line = ''
+            else:
+                import pdb; pdb.set_trace()
+                line = ''
 
-        queue.append(line)
+        # process line
+        pos_execve = line.find("execve")
+        if pos_execve > 0:
+            pos_equal = line.rfind("=")
 
-        # process queue
-        for line in queue:
-            pos_execve = line.find("execve")
-            if pos_execve > 0:
-                pos_equal = line.rfind("=")
+            cmd, args, envs = eval(line[pos_execve+6:pos_equal])
 
-                cmd, args, envs = eval(line[pos_execve+6:pos_equal])
+            # get $PWD
+            pwd = None
+            for env in envs:
+                if env.startswith("PWD="):
+                    pwd = env[4:]
+                    break
 
-                # get $PWD
-                pwd = None
-                for env in envs:
-                    if env.startswith("PWD="):
-                        pwd = env[4:]
-                        break
+            # get compiler
+            compiler = get_compiler(cmd, pwd, args)
 
-                # get compiler
-                compiler = get_compiler(cmd, pwd, args)
+            if compiler is not None:
+                config['strace/compile/%s'%compiler.source] = compiler
 
-                if compiler is not None:
-                    config['strace/compile/%s'%compiler.source] = compiler
+    logging.debug('Leaving "survey_application"')

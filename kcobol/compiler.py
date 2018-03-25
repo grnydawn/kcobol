@@ -7,8 +7,6 @@ import os
 import logging
 from abc import ABCMeta, abstractmethod, abstractproperty
 
-logger = logging.getLogger('kcobol')
-
 class COBOLCompiler(object):
 
     __metaclass__ = ABCMeta
