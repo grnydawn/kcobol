@@ -7,7 +7,12 @@ from builtins import *
 
 import os
 import datetime
-import configparser
+
+try:
+    import configparser
+except:
+    import ConfigParser as configparser
+
 import click
 
 from .config import config
@@ -63,7 +68,7 @@ def initialize_project():
     # configuration setup
     subcmd = config['opts/main/subcommand']
     now = datetime.datetime.now()
-    nowstr = unicode(now.replace(microsecond=0))
+    nowstr = now.replace(microsecond=0)
 
     config['%s/started_at'%subcmd] = now
     config['prjconfig/%s/last_execution_started_at'%subcmd] = nowstr

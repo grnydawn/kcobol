@@ -8,7 +8,7 @@ import os
 from stemtree import Node
 from .config import config
 from .tree import SourceLineTree
-from .application import survey_application
+from .application import survey_application_strace
 from .util import exit
 
 def _parse_argument():
@@ -56,16 +56,19 @@ def _preprocess_source():
     pass
 
 def _parse_source():
-    pass
+
+    _preprocess_source()
+
+    # parse
 
 def read_source():
 
     _parse_argument()
 
-    tree = SourceLineTree(config['opts/extract/target/filepath'])
-
-    survey_application()
-
-    _preprocess_source()
+    survey_application_strace()
 
     _parse_source()
+
+    #tree = SourceLineTree(config['opts/extract/target/filepath'])
+
+

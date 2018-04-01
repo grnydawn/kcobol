@@ -6,7 +6,10 @@ from builtins import *
 import sys
 import subprocess
 import logging
+import hashlib
 import click
+
+KCOBOL_CHARSET = 'utf-8'
 
 #logger = logging.getLogger('kcobol')
 
@@ -21,15 +24,37 @@ def exit(exitno=0, msg="", usage=False):
         logging.info(msg)
     sys.exit(exitno)
 
-def runcmd(cmd, cwd=None, env=None):
+def runcmd_old(cmd, cwd=None, env=None):
     p = subprocess.Popen(cmd, stdout=subprocess.PIPE,
         stderr=subprocess.STDOUT, cwd=cwd, env=env, shell=True)
     while(True):
       retcode = p.poll()
       line = p.stdout.readline()
-      if line: yield line
+      if line: yield line.decode(KCOBOL_CHARSET)
       if(retcode is not None):
         break
+
+def runcmd(cmd, cwd=None, env=None):
+    popen = subprocess.Popen(cmd, stdout=subprocess.PIPE, cwd=cwd, env=env,
+        stderr=subprocess.STDOUT, universal_newlines=True, shell=True)
+    for stdout_line in iter(popen.stdout.readline, ''):
+        yield stdout_line
+    popen.stdout.close()
+    return_code = popen.wait()
+    if return_code:
+        raise subprocess.CalledProcessError(return_code, cmd)
+
+
+def hash_sha1(text):
+    try:
+        text = text.encode(KCOBOL_CHARSET)
+    except (UnicodeError, AttributeError) as e:
+        pass
+    return hashlib.sha1(text).hexdigest()
+
+def istext(path):
+    out = ''.join([l.strip() for l in runcmd('file '+path)])
+    return out.endswith('text')
 
 def initialize_logging(outdir):
 

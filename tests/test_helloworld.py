@@ -9,6 +9,8 @@ from click.testing import CliRunner
 
 from kcobol import cli
 
+# TODO: change srcdir to relative path, and output with temporary directory
+
 srcdir = "/home/youngsung/temp/cookiecutter_work/kcobol/tests/cobol/helloworld"
 output = "/home/youngsung/temp/kcoboltest"
 source = "%s/helloworld.cob"%srcdir

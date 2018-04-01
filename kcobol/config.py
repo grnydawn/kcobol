@@ -8,7 +8,10 @@ from builtins import *
 import os
 import click
 import pygtrie
-import configparser
+try:
+    import configparser
+except:
+    import ConfigParser as configparser
 
 # constants
 APP_NAME = u'kcobol'
@@ -30,6 +33,13 @@ class StemTrie(pygtrie.StringTrie):
                 yield name, _node.value
         else:
             raise StopIteration()
+
+    def has_key(self, key):
+        try:
+            node, trace = self._get_node(key)
+            return True
+        except KeyError:
+            return False
 
     def __str__(self):
         lines = []

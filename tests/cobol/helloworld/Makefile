@@ -1,13 +1,13 @@
 NAME := helloworld
 SRC  := ${NAME}.cob
 COBC := cobc
-OPTS := -x
+OPTS := -v 
 
 build: ${NAME}.cob
-	${COBC} -x $<
+	${COBC} -x ${OPTS} $<
 
 %.o: %.cob
-	${COBC} -c $<
+	${COBC} -c ${OPTS} $<
 
 run: build
 	./${NAME}

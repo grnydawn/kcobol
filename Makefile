@@ -90,9 +90,9 @@ dev-install: clean ## install the package locally
 	python setup.py develop
 
 antlr-python3:
-	cd grammar; java -jar /usr/local/lib/antlr-4.7.1-complete.jar -Dlanguage=python3 -visitor -o p2-lang Cobol85.g4
-	cd grammar; java -jar /usr/local/lib/antlr-4.7.1-complete.jar -Dlanguage=python3 -visitor -o p2-prep Cobol85Preprocessor.g4
+	cd grammar; java -jar /usr/local/lib/antlr-4.7.1-complete.jar -Dlanguage=Python3 -visitor -o p3-lang Cobol85.g4
+	cd grammar; java -jar /usr/local/lib/antlr-4.7.1-complete.jar -Dlanguage=Python3 -visitor -o p3-prep Cobol85Preprocessor.g4
 
 antlr-python2:
-	cd grammar; java -jar /usr/local/lib/antlr-4.7.1-complete.jar -Dlanguage=python2 -visitor -o p3-lang Cobol85.g4
-	cd grammar; java -jar /usr/local/lib/antlr-4.7.1-complete.jar -Dlanguage=python2 -visitor -o p3-prep Cobol85Preprocessor.g4
+	cd grammar; java -jar /usr/local/lib/antlr-4.7.1-complete.jar -Dlanguage=Python2 -visitor -o p2-lang Cobol85.g4
+	cd grammar; java -jar /usr/local/lib/antlr-4.7.1-complete.jar -Dlanguage=Python2 -visitor -o p2-prep Cobol85Preprocessor.g4
