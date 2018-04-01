@@ -1,7 +1,7 @@
 NAME := helloworld
 SRC  := ${NAME}.cob
 COBC := cobc
-OPTS := -v 
+OPTS := -v --std=default
 
 build: ${NAME}.cob
 	${COBC} -x ${OPTS} $<

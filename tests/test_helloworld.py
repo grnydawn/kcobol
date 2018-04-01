@@ -3,15 +3,18 @@
 
 """Tests for `kcobol` package."""
 
+import os
 import pytest
 
 from click.testing import CliRunner
 
 from kcobol import cli
 
+basedir = os.path.dirname(__file__)
+
 # TODO: change srcdir to relative path, and output with temporary directory
 
-srcdir = "/home/youngsung/temp/cookiecutter_work/kcobol/tests/cobol/helloworld"
+srcdir = "%s/cobol/helloworld"%basedir
 output = "/home/youngsung/temp/kcoboltest"
 source = "%s/helloworld.cob"%srcdir
 clean = "cd %s;make clean"%srcdir

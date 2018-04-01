@@ -3,6 +3,7 @@ from __future__ import (absolute_import, division,
                         print_function)
 from builtins import *
 
+import os
 import re
 import logging
 
@@ -116,11 +117,13 @@ def survey_application_strace():
                                 pwd = env[4:]
                                 break
 
-                        # get compiler
-                        compiler = get_compiler(cmd, pwd, args)
+                        path, name = os.path.split(cmd)
+                        if name == args[0]:
+                            # get compiler
+                            compiler = get_compiler(cmd, pwd, args)
 
-                        if compiler is not None:
-                            config['strace/compile/source/%s'%compiler.source] = compiler
+                            if compiler is not None:
+                                config['strace/compile/source/%s'%compiler.source] = compiler
                     elif pos_read > 0:
                         match = _read_re.match(line[pos_read+5:pos_equal])
                         if match:
@@ -142,4 +145,5 @@ def survey_application_strace():
                     logging.debug(str(e))
                     import pdb; pdb.set_trace()
 
+    #import pdb; pdb.set_trace()
     logging.debug('Leaving "survey_application_strace"')

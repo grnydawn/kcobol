@@ -6,6 +6,7 @@ from builtins import *
 import os
 import re
 import logging
+import subprocess
 from abc import ABCMeta, abstractmethod, abstractproperty
 
 from .config import config
@@ -16,10 +17,6 @@ from .util import runcmd, hash_sha1, istext
 #        it seems also depends on if it requires argument or not
 # two dashes : no cobining feature, search if it can find only one option
 #             if multiple options found, display it
-# NOTE: it may not need to analyze all compiler options
-#       just collect -D and -I options or other required options
-#       check if an argument is an actual path to a source file
-#       and if this is related to any path required compiler
 
 _re_cobol_src = re.compile(r'(ID|IDENTIFICATION)\s+DIVISION\s*\.', re.I)
 
@@ -28,22 +25,8 @@ class COBOLCompiler(object):
     __metaclass__ = ABCMeta
 
     @abstractproperty
-    def names(self):
-        pass
-
-    # well-known options and commands
-    _D = '-D'           # macro compileroption
-    _I = '-I'           # include compiler option
-
-    @abstractproperty
     def source(self):
         pass
-
-    @classmethod
-    def match(cls, name):
-        if name in cls.names:
-            return True
-        return False
 
     def _getmacro(self, macro):
         splitmacro = macro.split('=')
@@ -70,11 +53,63 @@ class COBOLCompiler(object):
         with open(path) as f:
             return True if _re_cobol_src.search(f.read()) else False
 
+class GnuCOBOL(COBOLCompiler):
+
+    filearg_opts = ['-T', '-t', '-P', '-l', '-conf']
+
+    # well-known options and commands
+    _D = '-D'           # macro compileroption
+    _I = '-I'           # include compiler option
+    _S = '-std'         # cobol standard option
+    _FIXED = ('-free', '-F')
+    _FREE = ('-fixed', )
+
+    def __init__(self, path, pwd, flags):
+
+        self.path = path
+        self.pwd = pwd
+        self.flags = []
+        self.srcs = []
+        self.incs = []
+        self.macros = []
+        self.format = 'fixed'
+        self.standard = 'default'
+
+        self.parse_flags(self.normalize_flags(flags))
+
+    @classmethod
+    def match(cls, version):
+        try:
+            cmd, name, version = version[0].split()
+            if cmd == 'cobc' and name == '(GnuCOBOL)':
+                return cls.__name__, name, version
+        except:
+            pass
+
+    @property
+    def source(self):
+        if len(self.srcs) > 0:
+            return self.srcs[0]
+
+    def normalize_flags(self, _flags):
+        # handles combined flags, equal sign, and double dashes
+        flags = []
+        for _flag in _flags:
+            if _flag.startswith('--'):
+                _flag = _flag[1:]
+            if _flag.startswith('-'):
+                flags.extend(_flag.split('=', 1))
+                # TODO: handle combined flags
+            else:
+                flags.append(_flag)
+        return flags
+
     def parse_flags(self, opts):
 
         Cmark = False
         Imark = False
         Dmark = False
+        Smark = False
 
         for prev_item, item in zip(['']+opts[:-1], opts):
 
@@ -92,6 +127,11 @@ class COBOLCompiler(object):
                 Dmark = False
                 continue
 
+            if Smark:
+                self.standard = item
+                Smark = False
+                continue
+
             if item.startswith(self._I):
                 if len(item)>2:
                     self._getinc(item[2:])
@@ -102,6 +142,15 @@ class COBOLCompiler(object):
                     self.macros.append(self._getmacro(item[2:]))
                 else: Dmark = True
 
+            elif item in self._FREE:
+                self.format = 'free'
+
+            elif item in self._FIXED:
+                self.format = 'fixed'
+
+            elif item.startswith(self._S):
+                Smark = True
+
             elif not item.startswith('-'):
                 if not os.path.isabs(item):
                     item = os.path.join(self.pwd, item)
@@ -110,35 +159,6 @@ class COBOLCompiler(object):
                         pass
                     elif self._is_cobol_source(item):
                         self.srcs.append(item)
-
-class GnuCOBOL(COBOLCompiler):
-
-    names = ("cobc", )
-    filearg_opts = ['-T', '-t', '-P', '-l', '-conf', '--P', '--conf']
-
-
-    def __init__(self, path, pwd, flags):
-
-        self.path = path
-        self.pwd = pwd
-        self.flags = []
-        self.srcs = []
-        self.incs = []
-        self.macros = []
-
-        if not config.has_key('fileconfig/'+hash_sha1(path)):
-            self.config_compiler(path)
-
-        self.parse_flags(flags)
-
-    @property
-    def source(self):
-        if len(self.srcs) > 0:
-            return self.srcs[0]
-
-    def config_compiler(self, path):
-        #import pdb; pdb.set_trace()
-        pass
 
 #    def parse_manual(self, path):
 #
@@ -177,11 +197,19 @@ class GnuCOBOL(COBOLCompiler):
 
 def get_compiler(cmd, pwd, args):
 
-    path, name = os.path.split(cmd)
-    if name != args[0]: return
+    cfgkey = 'fileconfig/compiler/'+cmd
 
-    matched = False
     for subcls in COBOLCompiler.__subclasses__():
-        matched = subcls.match(name)
-        if matched:
-            return subcls(cmd, pwd, args[1:])
+        if config.has_key(cfgkey):
+            clsname, name, version = config[cfgkey]
+            if clsname == subcls.__name__:
+                return subcls(cmd, pwd, args[1:])
+        else:
+            try:
+                out = [o for o in runcmd('%s --version'%cmd)]
+                matched = subcls.match(out)
+                if matched:
+                    config[cfgkey] = tuple(matched)
+                    return subcls(cmd, pwd, args[1:])
+            except (subprocess.CalledProcessError,) as e:
+                pass
