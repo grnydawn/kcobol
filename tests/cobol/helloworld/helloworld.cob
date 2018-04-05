@@ -1,6 +1,7 @@
        IDENTIFICATION DIVISION.
        PROGRAM-ID. HELLO-WORLD.
-      * simple hello world program
        PROCEDURE DIVISION.
+      * <kcobol extract name="hello"
            DISPLAY 'Hello world!'.
+      * /kcobol>
            STOP RUN.

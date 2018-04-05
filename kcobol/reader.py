@@ -6,6 +6,7 @@ from builtins import *
 import os
 
 from stemtree import Node
+from stemcobol import parse
 from .config import config
 from .tree import SourceLineTree
 from .application import survey_application_strace
@@ -52,23 +53,26 @@ def _parse_argument():
         exit(-1, msg=u"'run' command is not found..", usage=True)
 
 
-def _preprocess_source():
+def preprocess_source():
     pass
 
-def _parse_source():
+def parse_source(path, compiler):
 
-    _preprocess_source()
+    preprocess_source()
 
     # parse
+    with open(path) as f:
+        tree = parse(f.read(), compiler.format, compiler.standard)
+        tree._shared_attrs['source_path'] = path
+        return tree
 
-def read_source():
+def read_target():
 
     _parse_argument()
 
     survey_application_strace()
 
-    _parse_source()
+    target = config['opts/extract/target/filepath']
+    compiler = config['strace/compile/source/%s'%target]
 
-    #tree = SourceLineTree(config['opts/extract/target/filepath'])
-
-
+    return parse_source(target, compiler)

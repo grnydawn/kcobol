@@ -124,6 +124,10 @@ def survey_application_strace():
 
                             if compiler is not None:
                                 config['strace/compile/source/%s'%compiler.source] = compiler
+                    elif pos_write > 0:
+                        logging.debug(line)
+                        import pdb; pdb.set_trace()
+
                     elif pos_read > 0:
                         match = _read_re.match(line[pos_read+5:pos_equal])
                         if match:
@@ -136,10 +140,7 @@ def survey_application_strace():
                                     with open(path, 'rb') as f:
                                         content = f.read()
                                 config['strace/compile/read/%s'%match.group('path')] = hash_sha1(content)
-                        logging.debug(line)
-                    elif pos_write > 0:
-                        logging.debug(line)
-                        import pdb; pdb.set_trace()
+                        #logging.debug(line)
 
                 except Exception as e:
                     logging.debug(str(e))

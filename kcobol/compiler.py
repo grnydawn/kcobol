@@ -8,6 +8,7 @@ import re
 import logging
 import subprocess
 from abc import ABCMeta, abstractmethod, abstractproperty
+from stemcobol import FREE_FORMAT, FIXED_FORMAT, VARIABLE_FORMAT
 
 from .config import config
 from .util import runcmd, hash_sha1, istext
@@ -72,8 +73,8 @@ class GnuCOBOL(COBOLCompiler):
         self.srcs = []
         self.incs = []
         self.macros = []
-        self.format = 'fixed'
-        self.standard = 'default'
+        self.format = FIXED_FORMAT
+        self.standard = '%s:default'%self.__class__.__name__
 
         self.parse_flags(self.normalize_flags(flags))
 
@@ -128,7 +129,7 @@ class GnuCOBOL(COBOLCompiler):
                 continue
 
             if Smark:
-                self.standard = item
+                self.standard = '%s:%s'%(self.__class__.__name__, item)
                 Smark = False
                 continue
 
@@ -143,10 +144,10 @@ class GnuCOBOL(COBOLCompiler):
                 else: Dmark = True
 
             elif item in self._FREE:
-                self.format = 'free'
+                self.format = FREE_FORMAT
 
             elif item in self._FIXED:
-                self.format = 'fixed'
+                self.format = FIXED_FORMAT
 
             elif item.startswith(self._S):
                 Smark = True
