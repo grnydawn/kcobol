@@ -4,13 +4,19 @@ from __future__ import (absolute_import, division,
 from builtins import *
 
 import os
+import re
+import logging
 
 from stemtree import Node
-from stemcobol import parse
+from stemcobol import parse, EOF
 from .config import config
 from .tree import SourceLineTree
 from .application import survey_application_strace
 from .util import exit
+
+#_re_kcobol_begin = re.compile(r'\s*\*>\s+<\s*kcobol\s+(?P<command>[0-9_a-z]+)', re.I)
+_re_kcobol_begin = re.compile(r'<\s*kcobol\s+(?P<command>[0-9_a-z]+)', re.I)
+_re_kcobol_end = re.compile(r'/\s*kcobol\s*>', re.I)
 
 def _parse_argument():
 
@@ -76,3 +82,29 @@ def read_target():
     compiler = config['strace/compile/source/%s'%target]
 
     return parse_source(target, compiler)
+
+def collect_kernel_statements(obj, basket):
+
+    if hasattr(obj, 'text'):
+
+        begin_search = _re_kcobol_begin.search(obj.text)
+        if begin_search:
+            if obj.root.kernel_flag:
+                raise Exception('Unbalanced kcobol directive: %s'%obj.text)
+            obj.root.kernel_group.append([])
+            obj.root.kernel_flag = True
+        else:
+            end_search = _re_kcobol_end.search(obj.text)
+            if end_search:
+                if not obj.root.kernel_flag:
+                    raise Exception('Unbalanced kcobol directive: %s'%obj.text)
+                obj.root.kernel_group[-1].append(obj)
+                obj.root.kernel_flag = False
+
+        logging.debug(obj.text)
+        if obj.root.kernel_flag:
+            obj.root.kernel_group[-1].append(obj)
+
+def remove_eof(obj):
+    return '' if obj.token == EOF else obj.text
+

@@ -5,37 +5,13 @@ from builtins import *
 
 """Main module."""
 
+import os
 import re
 import logging
 import click
 from stemtree import DFS_LF
 from .config import read_config, config
-from .reader import read_target
-
-_re_kcobol_begin = re.compile(r'\s*\*>\s+<\s*kcobol\s+(?P<command>[0-9_a-z]+)', re.I)
-_re_kcobol_end = re.compile(r'/\s*kcobol\s*>', re.I)
-
-def collect_kernel_statements(obj, basket):
-
-    if hasattr(obj, 'text'):
-
-        begin_match = _re_kcobol_begin.match(obj.text)
-        if begin_match:
-            if obj.root.kernel_flag:
-                raise Exception('Unbalanced kcobol directive: %s'%obj.text)
-            obj.root.kernel_group.append([])
-            obj.root.kernel_flag = True
-        else:
-            end_search = _re_kcobol_end.search(obj.text)
-            if end_search:
-                if not obj.root.kernel_flag:
-                    raise Exception('Unbalanced kcobol directive: %s'%obj.text)
-                obj.root.kernel_group[-1].append(obj)
-                obj.root.kernel_flag = False
-
-        logging.debug(obj.text)
-        if obj.root.kernel_flag:
-            obj.root.kernel_group[-1].append(obj)
+from .reader import read_target, collect_kernel_statements, remove_eof
 
 def on_main_command(opts):
     logging.debug('Entering "on_main_command"')
@@ -56,7 +32,6 @@ def on_extract_command(opts):
     # save command-line options in config
     for k, v in opts.items():
         config[u'opts/extract/%s'%k] = v
-    #click.echo(str(config))
 
     # reader
     tree = read_target()
@@ -65,11 +40,17 @@ def on_extract_command(opts):
     basket = {}
     tree.search(collect_kernel_statements, DFS_LF, basket=basket)
 
+    import pdb; pdb.set_trace()
     # transformers
 
 
     # writer
 
-    import pdb; pdb.set_trace()
+    outfile = os.path.basename(config['opts/extract/target'])
+    outpath = os.path.join(config['opts/main/output'], outfile)
+
+    with open(outpath, 'w') as f:
+        f.write(tree.tocobol(revise=remove_eof))
+
     logging.debug('Leaving "on_extract_command"')
     return 0
