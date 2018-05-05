@@ -9,6 +9,13 @@ import logging
 import hashlib
 import click
 
+try:
+    from html.parser import HTMLParser
+except:
+    from HTMLParser import HTMLParser
+
+from .exception import UsageError
+
 KCOBOL_CHARSET = 'utf-8'
 
 #logger = logging.getLogger('kcobol')
@@ -77,3 +84,13 @@ def initialize_logging(outdir):
 
     logger.addHandler(fh)
     logger.addHandler(ch)
+
+def parse_kcobol_directive(text):
+
+    class MyParser(HTMLParser):
+        def handle_starttag(self, tag, attrs):
+            self.direct = dict(attrs)
+
+    parser = MyParser()
+    parser.feed('<dummy %s >'%text)
+    return parser.direct

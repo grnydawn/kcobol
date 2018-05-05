@@ -12,11 +12,13 @@ from stemcobol import parse, EOF
 from .config import config
 from .tree import SourceLineTree
 from .application import survey_application_strace
+from .search import searchers, default_searcher
 from .util import exit
 
 #_re_kcobol_begin = re.compile(r'\s*\*>\s+<\s*kcobol\s+(?P<command>[0-9_a-z]+)', re.I)
 _re_kcobol_begin = re.compile(r'<\s*kcobol\s+(?P<command>[0-9_a-z]+)', re.I)
-_re_kcobol_end = re.compile(r'/\s*kcobol\s*>', re.I)
+_re_kcobol_end1 = re.compile(r'\*>\s(?P<attrs>.*)/\s*kcobol\s*>', re.I)
+_re_kcobol_end2 = re.compile(r':(?P<attrs>.*)/\s*kcobol\s*>', re.I)
 
 def _parse_argument():
 
@@ -67,10 +69,14 @@ def parse_source(path, compiler):
     preprocess_source()
 
     # parse
-    with open(path) as f:
-        tree = parse(f.read(), compiler.format, compiler.standard)
-        tree._shared_attrs['source_path'] = path
+    tree = parse(path, compiler.format, compiler.standard)
+    if tree.subnodes[0].name == 'RunUnit' and \
+        tree.subnodes[0].subnodes[0].name == 'CompilationUnit':
+        tree.subnodes[0].subnodes[0].source_path = path
         return tree
+    else:
+        return None
+
 
 def read_target():
 
@@ -83,28 +89,69 @@ def read_target():
 
     return parse_source(target, compiler)
 
-def collect_kernel_statements(obj, basket):
+def collect_kernel_statements(node, basket):
 
-    if hasattr(obj, 'text'):
+    if hasattr(node, 'text'):
 
-        begin_search = _re_kcobol_begin.search(obj.text)
+        begin_search = _re_kcobol_begin.search(node.text)
         if begin_search:
-            if obj.root.kernel_flag:
-                raise Exception('Unbalanced kcobol directive: %s'%obj.text)
-            obj.root.kernel_group.append([])
-            obj.root.kernel_flag = True
+            if node.root.kernel_flag:
+                raise Exception('Unbalanced kcobol directive: %s'%node.text)
+            node.root.kernel_group.append([])
+            kcobol_group = [begin_search.group('command'), node.text[begin_search.end():], node]
+            node.root.kcobol_group.append(kcobol_group)
+            node.root.kernel_flag = True
         else:
-            end_search = _re_kcobol_end.search(obj.text)
+
+            if node.text.find('__stemcobol__') > 0:
+                end_search = _re_kcobol_end2.search(node.text)
+            else:
+                end_search = _re_kcobol_end1.search(node.text)
             if end_search:
-                if not obj.root.kernel_flag:
-                    raise Exception('Unbalanced kcobol directive: %s'%obj.text)
-                obj.root.kernel_group[-1].append(obj)
-                obj.root.kernel_flag = False
+                if not node.root.kernel_flag:
+                    raise Exception('Unbalanced kcobol directive: %s'%node.text)
+                node.root.kernel_group[-1].append(node)
+                node.root.kcobol_group[-1][1] += end_search.group('attrs')
+                node.root.kcobol_group[-1].append(node)
+                curidx = node.uppernode.subnodes.index(node)
+                for hnode in node.uppernode.subnodes[curidx+1:]:
+                    if hnode.name == 'hidden':
+                        node.root.kernel_group[-1].append(hnode)
+                    else:
+                        break
+                node.root.kernel_flag = False
 
-        logging.debug(obj.text)
-        if obj.root.kernel_flag:
-            obj.root.kernel_group[-1].append(obj)
+        if hasattr(node, 'root') and node.root.kernel_flag:
+            node.kernel_index = len(node.root.kernel_group) - 1
+            node.root.kernel_group[-1].append(node)
 
-def remove_eof(obj):
-    return '' if obj.token == EOF else obj.text
+def remove_eof(node):
+    return '' if node.token == EOF else node.text
 
+
+## try to resolve by this node 
+#def collect_resolution(node, basket):
+#
+#    rpath = basket['resolving_path']
+#
+#    if node.name in ('hidden', ) or node is rpath[0]:
+#        return
+#
+#    return resolvers.get(node.name, default_resolver)(node, rpath, basket)
+#
+## move to next resolvable node
+#def search_resolution(node, basket):
+#
+#    rpath = basket['resolving_path']
+#
+#    if node is rpath[0]:
+#        return node.uppernode
+#
+#    # check if subnodes (except one that orginated) can resolve
+#    nextnode = searchers.get(node.name, default_searcher)(node, rpath, basket)
+#
+#    # defer to uppernode
+#    if not isinstance(nextnode, node.__class__):
+#        return node.uppernode
+#    else:
+#        return nextnode

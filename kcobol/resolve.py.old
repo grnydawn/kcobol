@@ -1,0 +1,205 @@
+# -*- coding: utf-8 -*-
+from __future__ import (absolute_import, division,
+                        print_function)
+from builtins import *
+
+import logging
+from stemtree import UPWARDS
+from .exception import ResolveError
+
+
+###################################################
+##   Common resolvers
+###################################################
+
+def resolve(node, subnode, basket):
+    basket['path'] = []
+    resolver = resolvers.get(node.name, default_resolver)
+    resolver(node, subnode, basket)
+    node.root.resolve_paths.append(basket['path'])
+
+###################################################
+##  Resolvers
+###################################################
+
+# next resolve is defined by
+# True: uppernode
+# integer: subnode
+# False, None: Stop 
+# if need branching, cal resolve_* inside of a resolve_?
+
+def default_resolver(node, subnode, basket):
+
+    raise ResolveError(node)
+
+def resolve_hidden(node, subnode, basket):
+    pass
+
+def resolve_terminal(node, subnode, basket):
+    if subnode is None:
+        return True
+    else:
+        pass
+
+def resolve_CobolWord(node, subnode, basket):
+
+    if subnode.name == 'terminal':
+        import pdb; pdb.set_trace()
+    else:
+        return [idx for idx in range(len(node.subnodes))]
+
+def resolve_Literal(node, subnode, basket):
+    if subnode.name == 'terminal':
+        pass
+    else:
+        import pdb; pdb.set_trace()
+
+
+def resolve_DisplayStatement(node, subnode, basket):
+
+    if subnode.name == 'terminal':
+        if subnode.token == node.tokenmap['DISPLAY']:
+            return True
+        else:
+            import pdb; pdb.set_trace()
+    else:
+        import pdb; pdb.set_trace()
+
+def resolve_Statement(node, subnode, basket):
+    return True
+
+def resolve_Sentence(node, subnode, basket):
+
+    if subnode.name == 'terminal':
+        if subnode.token == node.tokenmap['DOT_FS']:
+            pass
+        else:
+            import pdb; pdb.set_trace()
+    else:
+        return True
+
+def resolve_Paragraphs(node, subnode, basket):
+
+    if subnode.name == 'terminal':
+        import pdb; pdb.set_trace()
+    elif subnode.name == 'Sentence':
+        return True
+    else:
+        import pdb; pdb.set_trace()
+
+def resolve_ProcedureDivisionBody(node, subnode, basket):
+
+    if subnode.name == 'terminal':
+        import pdb; pdb.set_trace()
+    elif subnode.name == 'Paragraphs':
+        return True
+    else:
+        import pdb; pdb.set_trace()
+
+def resolve_ProcedureDivision(node, subnode, basket):
+
+    if subnode.name == 'terminal':
+        import pdb; pdb.set_trace()
+    elif subnode.name == 'ProcedureDivisionBody':
+        snodes = []
+        for snode in node.subnodes:
+            if hasattr(snode, 'token') and snode.token in (node.tokenmap['PROCEDURE'],
+                node.tokenmap['DIVISION'], node.tokenmap['DOT_FS']):
+                snodes.append(snode)
+            elif snode.name == 'hidden':
+                snodes.append(snode)
+        node.root.resolve_paths.append(snodes)
+        return True
+    else:
+        import pdb; pdb.set_trace()
+
+def resolve_ProgramName(node, subnode, basket):
+
+    if subnode.name == 'terminal':
+        import pdb; pdb.set_trace()
+    elif subnode.name == 'ProgramIdParagraph':
+        return [idx for idx in range(len(node.subnodes))]
+    else:
+        import pdb; pdb.set_trace()
+
+def resolve_ProgramIdParagraph(node, subnode, basket):
+
+    if subnode.name == 'terminal':
+        import pdb; pdb.set_trace()
+    elif subnode.name == 'IdentificationDivision':
+        return [idx for idx in range(len(node.subnodes))]
+
+    else:
+        import pdb; pdb.set_trace()
+
+def resolve_IdentificationDivision(node, subnode, basket):
+
+    if subnode.name == 'terminal':
+        import pdb; pdb.set_trace()
+    elif subnode.name == 'ProgramUnit':
+        return [idx for idx in range(len(node.subnodes))]
+    else:
+        import pdb; pdb.set_trace()
+
+def resolve_ProgramUnit(node, subnode, basket):
+
+    if subnode.name == 'terminal':
+        import pdb; pdb.set_trace()
+    elif subnode.name == 'ProcedureDivision':
+        for snode in node.subnodes:
+            if snode.name == 'IdentificationDivision':
+                _basket = {}
+                resolve(snode, node, _basket)
+                break
+        return True
+    else:
+        import pdb; pdb.set_trace()
+
+def resolve_CompilationUnit(node, subnode, basket):
+
+    if subnode.name == 'terminal':
+        import pdb; pdb.set_trace()
+    elif subnode.name == 'ProgramUnit':
+        return True
+    else:
+        import pdb; pdb.set_trace()
+
+def resolve_StartRule(node, subnode, basket):
+
+    if subnode.name == 'terminal':
+        import pdb; pdb.set_trace()
+    elif subnode.name == 'CompilationUnit':
+        return True
+    else:
+        import pdb; pdb.set_trace()
+
+def resolve_root(node, subnode, basket):
+
+    if subnode.name == 'terminal':
+        import pdb; pdb.set_trace()
+    else:
+        pass
+
+def decorator(func):
+    def wrapper(node, subnode, basket):
+        #logging.debug('DD: %s: %s'%(node.name, node.text if hasattr(node, 'text') else ''))
+        basket['path'].append(node)
+        ret = func(node, subnode, basket)
+        if ret is True:
+            resolver = resolvers.get(node.uppernode.name, default_resolver)
+            resolver(node.uppernode, node, basket)
+        else:
+            try:
+                for idx in ret:
+                    resolver = resolvers.get(node.subnodes[idx].name, default_resolver)
+                    resolver(node.subnodes[idx], node, basket)
+            except TypeError:
+                if isinstance(ret, int):
+                    resolver = resolvers.get(node.subnodes[ret].name, default_resolver)
+                    resolver(node.subnodes[ret], node, basket)
+    return wrapper
+
+resolvers = {}
+for name, obj in locals().items():
+    if name.startswith('resolve_'):
+        resolvers[name[8:]] = decorator(obj)
