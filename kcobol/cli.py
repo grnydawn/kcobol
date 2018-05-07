@@ -13,6 +13,7 @@ import logging
 from .kcobol import on_main_command, on_extract_command
 from .project import initialize_project
 from .util import initialize_logging
+from .exception import InternalError, UsageError
 
 
 @click.group(invoke_without_command=True)
@@ -47,7 +48,15 @@ def main(ctx, debug, output):
 def extract(ctx, target, clean, build, run):
     """extract a kerel from Cobol source codes."""
 
-    return on_extract_command(ctx.params)
+    try:
+        return on_extract_command(ctx.params)
+    except InternalError as err:
+        logging.critical(str(err))
+    except UsageError as err:
+        click.echo(main.get_help(ctx))
+        logging.critical(str(err))
+    finally:
+        pass
 
 # subcommands
 main.add_command(extract)

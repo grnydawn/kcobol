@@ -27,11 +27,13 @@ class StemTrie(pygtrie.StringTrie):
             raise StopIteration()
 
     def get_subitems(self, key, with_value=False):
-        node, trace = self._get_node(key)
-        if node:
-            for name, _node in node.children.items():
-                yield name, _node.value
-        else:
+        split_key = key.split(self._separator)
+        try:
+            for subkey in self.keys(prefix=key):
+                split_subkey = subkey.split(self._separator)
+                yield self._separator.join(split_subkey[len(split_key):]
+                    ), self[subkey]
+        except:
             raise StopIteration()
 
     def has_key(self, key):
@@ -58,11 +60,13 @@ config[u'fileconfig/general/app_name'] = APP_NAME
 
 ## public functions
 
-def write_config(app_dir):
+def write_config():
+    app_dir = click.get_app_dir(APP_NAME)
     if not os.path.exists(app_dir):
         os.makedirs(app_dir)
     cfg = os.path.join(app_dir, FILE_CONFIG)
     parser = configparser.RawConfigParser()
+    parser.optionxform = str
     if config.has_subtrie(u'fileconfig'):
         for sec in config.get_subkeys(u'fileconfig'):
             parser.add_section(sec)
@@ -76,6 +80,7 @@ def read_config():
     cfg = os.path.join(app_dir, FILE_CONFIG)
     if os.path.exists(cfg):
         parser = configparser.RawConfigParser()
+        parser.optionxform = str
         parser.read([cfg])
         rv = {}
         for section in parser.sections():

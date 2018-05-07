@@ -4,6 +4,8 @@ from __future__ import (absolute_import, division,
 from builtins import *
 from collections import OrderedDict
 
+from stemtree import DFS_RF
+
 from .exception import AssembleError
 from .util import exit
 
@@ -76,6 +78,43 @@ def _mark_and_check(node, path, attrs):
     _mark(node, path, attrs)
     return _check(node, path, attrs)
 
+def _dotfs(node, path, attrs):
+
+    def _find_last_terminal(snode, basket):
+        if snode.name == "terminal":
+            basket['insert_after'] = snode
+            return snode.STOP_SEARCH
+
+    def _add_dotfs(snode, basket):
+        tnode = basket['insert_after']
+        dotfs = basket['dotfs']
+        if tnode.token != node.tokenmap['DOT_FS']:
+            tnode.uppernode.insert_after(tnode, dotfs)
+
+    last = None
+    dotfs = None
+    for idx, subnode in enumerate(node.subnodes):
+        if subnode.name == "hidden":
+            pass
+        elif subnode.name == "terminal":
+            if subnode.token == node.tokenmap['DOT_FS']:
+                dotfs = idx
+                break
+        elif subnode.knode is True:
+            last = idx
+
+    if last is not None and dotfs is not None:
+        dotfs_node = node.subnodes.pop(dotfs)
+        last_node = node.subnodes[last]
+        basket = {'dotfs': dotfs_node}
+        last_node.search(_find_last_terminal, DFS_RF, basket=basket,
+            postmove=_add_dotfs)
+
+def _goback_stmt(node, path, attrs):
+    if node.knode is True:
+        if hasattr(node, 'goback_stmt') and node.goback_stmt is not None:
+            _mark_subtree(node.goback_stmt)
+
 #def _collect_name(node, path, attrs):
 #    if 'name' in attrs:
 #        exit(exitno=1, msg='_collect_name: "name" key already exists.')
@@ -105,7 +144,7 @@ def _mark_subnodes(node, path, attrs):
 ##############################
 
 def _CompilationUnit_ProgramUnit(node, path, attrs):
-    import pdb; pdb.set_trace()
+
     for subnode in _mark_subnodes(node, path, attrs):
         pass
 
@@ -337,7 +376,7 @@ _operators = {
     },
 
     'frame_Sentence': {
-        'Statement': (_mark, _check),
+        'Statement': (_mark, _goback_stmt, _dotfs, _check),
     },
 
     'frame_Statement': {

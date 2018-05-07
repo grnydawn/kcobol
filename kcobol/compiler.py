@@ -62,8 +62,8 @@ class GnuCOBOL(COBOLCompiler):
     _D = '-D'           # macro compileroption
     _I = '-I'           # include compiler option
     _S = '-std'         # cobol standard option
-    _FIXED = ('-free', '-F')
-    _FREE = ('-fixed', )
+    _FREE = ('-free', '-F')
+    _FIXED = ('-fixed', )
 
     def __init__(self, path, pwd, flags):
 
@@ -202,7 +202,7 @@ def get_compiler(cmd, pwd, args):
 
     for subcls in COBOLCompiler.__subclasses__():
         if config.has_key(cfgkey):
-            clsname, name, version = config[cfgkey]
+            clsname, name, version = eval(config[cfgkey])
             if clsname == subcls.__name__:
                 return subcls(cmd, pwd, args[1:])
         else:

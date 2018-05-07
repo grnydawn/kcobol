@@ -6,6 +6,7 @@ from builtins import *
 import os
 import re
 import logging
+import pickle
 
 from stemtree import Node
 from stemcobol import parse, EOF
@@ -13,7 +14,7 @@ from .config import config
 from .tree import SourceLineTree
 from .application import survey_application_strace
 from .search import searchers, default_searcher
-from .util import exit
+from .util import exit, hash_sha1
 
 #_re_kcobol_begin = re.compile(r'\s*\*>\s+<\s*kcobol\s+(?P<command>[0-9_a-z]+)', re.I)
 _re_kcobol_begin = re.compile(r'<\s*kcobol\s+(?P<command>[0-9_a-z]+)', re.I)
@@ -85,7 +86,9 @@ def read_target():
     survey_application_strace()
 
     target = config['opts/extract/target/filepath']
-    compiler = config['strace/compile/source/%s'%target]
+    pickle_path = os.path.join(config['project/topdir'], hash_sha1(target))
+    with open(pickle_path, 'rb') as f:
+        compiler = pickle.load(f)
 
     return parse_source(target, compiler)
 
@@ -113,12 +116,6 @@ def collect_kernel_statements(node, basket):
                 node.root.kernel_group[-1].append(node)
                 node.root.kcobol_group[-1][1] += end_search.group('attrs')
                 node.root.kcobol_group[-1].append(node)
-                curidx = node.uppernode.subnodes.index(node)
-                for hnode in node.uppernode.subnodes[curidx+1:]:
-                    if hnode.name == 'hidden':
-                        node.root.kernel_group[-1].append(hnode)
-                    else:
-                        break
                 node.root.kernel_flag = False
 
         if hasattr(node, 'root') and node.root.kernel_flag:
@@ -127,31 +124,3 @@ def collect_kernel_statements(node, basket):
 
 def remove_eof(node):
     return '' if node.token == EOF else node.text
-
-
-## try to resolve by this node 
-#def collect_resolution(node, basket):
-#
-#    rpath = basket['resolving_path']
-#
-#    if node.name in ('hidden', ) or node is rpath[0]:
-#        return
-#
-#    return resolvers.get(node.name, default_resolver)(node, rpath, basket)
-#
-## move to next resolvable node
-#def search_resolution(node, basket):
-#
-#    rpath = basket['resolving_path']
-#
-#    if node is rpath[0]:
-#        return node.uppernode
-#
-#    # check if subnodes (except one that orginated) can resolve
-#    nextnode = searchers.get(node.name, default_searcher)(node, rpath, basket)
-#
-#    # defer to uppernode
-#    if not isinstance(nextnode, node.__class__):
-#        return node.uppernode
-#    else:
-#        return nextnode

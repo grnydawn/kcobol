@@ -11,7 +11,7 @@ import logging
 import click
 from stemtree import DFS_LF, UPWARDS, assemble_subtrees
 from stemcobol import EOF
-from .config import read_config, config
+from .config import read_config, write_config, config
 from .reader import (read_target, collect_kernel_statements, remove_eof,
     )
 from .resolve import resolve, pre_resolve, post_resolve
@@ -119,17 +119,12 @@ def on_extract_command(opts):
             os.mkdir(outdir)
         outpath = os.path.join(outdir, outfile)
 
-        def output_tree(node):
-            if node.token == EOF or node.knode is not True:
-                return ''
-            elif node.knode is True:
-                return node.text
-
         with open(outpath, 'w') as f:
-            #f.write(kernel_tree.tocobol(revise=output_tree))
             f.write(kernel_tree.tocobol(revise=remove_eof))
 
-    #import pdb; pdb.set_trace()
+    write_config()
+
+    import pdb; pdb.set_trace()
     logging.debug('Leaving "on_extract_command"')
     return 0
 

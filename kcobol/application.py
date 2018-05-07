@@ -6,14 +6,47 @@ from builtins import *
 import os
 import re
 import logging
+import tempfile
+import platform
+import datetime
+import time
+import math
+import pickle
 
 from .config import config
 from .compiler import get_compiler
+from .project import _write_project
 from .util import runcmd, hash_sha1, istext
+
+_sysname = platform.system()
 
 _pid_re = re.compile(r'(?P<pid>\d+)')
 _exitno_re = re.compile(r'(?P<exitno>\d+)')
-_read_re = re.compile(r'\d+<(?P<path>[^<]+)>')
+_iopath_re = re.compile(r'\d+<(?P<path>[^<]+)>')
+_dirpath_re = re.compile(r'"(?P<path>[^"]+)"')
+_unlinkat_re = re.compile(r'(?P<args>[^\)]+)\)')
+
+_tempdirs = {
+    'Linux': ('/tmp', '/var/tmp', '/usr/tmp'),
+    'Windows': ('C:\TEMP', 'C:\TMP', '\TEMP', '\TMP'),
+    'Darwin': ('/tmp',),
+}
+
+tempdirs = set(os.environ[var] for var in ('TMPDIR', 'TEMP', 'TMP') if var in os.environ)
+tempdirs |= set(_tempdirs.get(_sysname, ('/tmp',)))
+tempdirs.add(tempfile.gettempdir())
+
+_sysdirs = {
+    'Linux': ('/etc', '/usr', '/tmp', 'pipe', '/opt', '/bin'),
+    'Windows': tuple(),
+    'Darwin': tuple(),
+}
+
+_syscalls = {
+    'Linux': ('execve', 'read', 'write', 'unlink', 'unlinkat', 'chdir'),
+    'Windows': tuple(),
+    'Darwin': tuple(),
+}
 
 def _get_pid(line):
     pid_search = _pid_re.search(line)
@@ -27,24 +60,29 @@ def _get_exitno(line):
         return exitno_match.group('exitno')
     return '-1'
 
-def survey_application_strace():
+def _file_sha1(path):
+    if istext(path):
+        with open(path, 'r') as f:
+            content = f.read()
+    else:
+        with open(path, 'rb') as f:
+            content = f.read()
+    return hash_sha1(content)
 
-    logging.debug('Entering "survey_application_strace"')
+def _strace_run(cmd):
 
-    # clean
-    for line in runcmd(config['opts/extract/clean']):
-        pass
+    syscalls = _syscalls[_sysname]
+    sysdirs = _sysdirs[_sysname]
 
-    # build under inspection
-
-    syscalls = ('execve', 'read', 'write')
     unfinished = {}
     finished ={}
 
-    # TODO: use cache in project directory
+    curdirs = [os.getcwd()]
 
-    strace_cmd = 'strace -y -f -q -s 100000 -e trace='+','.join(syscalls)+' -v -- $SHELL -c "%s"'
-    for line in runcmd(strace_cmd%config['opts/extract/build']):
+    strace_cmd = 'strace -y -f -q -s 100000 -e trace=' + \
+        ','.join(syscalls)+' -v -- $SHELL -c "%s"'%cmd
+
+    for line in runcmd(strace_cmd):
 
         # check killed
         pos_killed = line.find("killed by")
@@ -96,55 +134,121 @@ def survey_application_strace():
                 line = ''
 
         # process line
-        pos_execve = line.find("execve")
-        pos_read = line.find("read")
-        pos_write = line.find("write")
-        if pos_execve > 0 or pos_read > 0 or pos_write > 0:
-            exitno = '-1'
-            pos_equal = line.rfind("=")
-            if pos_equal > 0:
-                exitno = _get_exitno(line[pos_equal+1:])
+        pos_syscall = {}
+        for syscall in syscalls:
+            pos_syscall[syscall] = line.find(syscall+"(")
 
-            if exitno == '0':
-                try:
-                    if pos_execve > 0:
-                        cmd, args, envs = eval(line[pos_execve+6:pos_equal])
+        if reduce( lambda x, y: x + 1 if y>=0 else x, [0]+pos_syscall.values()) > 1:
+            import pdb; pdb.set_trace()
 
-                        # get $PWD
-                        pwd = None
-                        for env in envs:
-                            if env.startswith("PWD="):
-                                pwd = env[4:]
-                                break
+        exitno = '-1'
+        pos_equal = line.rfind("=")
+        if pos_equal > 0:
+            exitno = _get_exitno(line[pos_equal+1:])
 
-                        path, name = os.path.split(cmd)
-                        if name == args[0]:
-                            # get compiler
-                            compiler = get_compiler(cmd, pwd, args)
+        for syscall, pos in pos_syscall.items():
 
-                            if compiler is not None:
-                                config['strace/compile/source/%s'%compiler.source] = compiler
-                    elif pos_write > 0:
-                        logging.debug(line)
-                        import pdb; pdb.set_trace()
+            if syscall == "execve" and exitno == "0" and pos >= 0:
+                cmd, args, envs = eval(line[pos+6:pos_equal])
+                yield syscall, cmd, args[1:], curdirs[-1]
 
-                    elif pos_read > 0:
-                        match = _read_re.match(line[pos_read+5:pos_equal])
-                        if match:
-                            path = match.group('path')
-                            if all(not path.startswith(p) for p in ('/etc', '/usr', '/tmp', 'pipe')):
-                                if istext(path):
-                                    with open(path, 'r') as f:
-                                        content = f.read()
-                                else:
-                                    with open(path, 'rb') as f:
-                                        content = f.read()
-                                config['strace/compile/read/%s'%match.group('path')] = hash_sha1(content)
-                        #logging.debug(line)
+            elif syscall == "read" and exitno == "0" and pos >= 0:
 
-                except Exception as e:
-                    logging.debug(str(e))
-                    import pdb; pdb.set_trace()
+                match = _iopath_re.match(line[pos+5:pos_equal])
+                if match:
+                    path = match.group('path')
+                    if all(not path.startswith(p) for p in sysdirs):
+                        yield syscall, path, _file_sha1(path), curdirs[-1]
 
-    #import pdb; pdb.set_trace()
+            elif syscall == "write" and pos >= 0:
+                match = _iopath_re.match(line[pos+6:])
+                if match:
+                    path = match.group('path')
+                    if os.path.exists(path) and all( not path.startswith(t) for t in tempdirs):
+                        mtime = os.path.getmtime(path)
+                        dtime = datetime.datetime.fromtimestamp(mtime)
+                        subsec = "{:.6f}".format(mtime-math.floor(mtime)).lstrip("0")
+                        yield syscall, path, dtime.strftime('%Y-%m-%d %H:%M:%S')+subsec, curdirs[-1]
+
+            elif syscall == "unlink" and exitno == "0" and pos >= 0:
+                match = _dirpath_re.match(line[pos+7:])
+                if match:
+                    path = match.group('path')
+                    if all( not path.startswith(t) for t in tempdirs):
+                        yield syscall, path, str(datetime.datetime.now()), curdirs[-1]
+
+            elif syscall == "unlinkat" and exitno == "0" and pos >= 0:
+                match = _unlinkat_re.match(line[pos+9:])
+                if match:
+                    args = match.group('args')
+                    _, path, _ = args.split(',')
+                    path = eval(path)
+                    if all( not path.startswith(t) for t in tempdirs):
+                        yield syscall, path, str(datetime.datetime.now()), curdirs[-1]
+
+            elif syscall == "chdir" and exitno == "0" and pos >= 0:
+                match = _dirpath_re.match(line[pos+6:])
+                if match:
+                    curdirs.append(match.group('path'))
+
+def survey_application_strace():
+
+    logging.debug('Entering "survey_application_strace"')
+
+    changed = [_file_sha1(path) != sha1 for path, sha1 in \
+        config.get_subitems('prjconfig/build/read')]
+
+    if len(changed) == 0 or any(changed):
+        # clean: unlink, unlinkat
+        for syscall, attr, value, pwd in _strace_run(config['opts/extract/clean']):
+            config['strace/clean/%s/%s'%(syscall, attr)] = value
+            if syscall in ('unlink', 'unlinkat'):
+                path = os.path.normpath(os.path.join(pwd, attr))
+                config['prjconfig/clean/unlink/%s'%path] = value
+
+        # build: read, write
+        for syscall, attr, value, pwd in _strace_run(config['opts/extract/build']):
+            path = os.path.normpath(os.path.join(pwd, attr))
+            config['strace/build/%s/%s'%(syscall, path)] = value
+            if syscall == 'read':
+                config['prjconfig/build/read/'+path] = value
+            elif syscall == 'write':
+                config['prjconfig/build/write/'+path] = value
+                if 'prjconfig/build/read/'+path in config:
+                    del config['prjconfig/build/read/'+path]
+            elif syscall in ('execve',):
+                compiler = get_compiler(path, pwd, value)
+                if compiler is not None:
+                    config['strace/build/compiler/%s'%compiler.source] = compiler
+                    pickle_path = os.path.join(config['project/topdir'], hash_sha1(compiler.source))
+                    with open(pickle_path,'wb') as f:
+                        pickle.dump(compiler, f)
+                    config['prjconfig/build/compiler/%s'%compiler.source] = pickle_path
+
+        # run: execve
+        for syscall, attr, value, pwd in _strace_run(config['opts/extract/run']):
+            path = os.path.normpath(os.path.join(pwd, attr))
+            config['strace/run/%s/%s'%(syscall, path)] = value
+            if syscall in ('execve',):
+                for k, v in config.get_subitems('prjconfig/build/write'):
+                    if path == k:
+                        config['prjconfig/run/%s/%s'%(syscall, path)] = v
+                        break
+
+        # find an executable target
+        # TODO: may or many not need to analyze linker command
+        items = dict(item for item in config.get_subitems('prjconfig/run/execve'))
+        if len(items) > 1:
+            for key in config.get_subitems('prjconfig/clean/unlink'):
+                if key in items:
+                    del items[key]
+        if len(items) == 1:
+            keys = list(items)
+            config['prjconfig/run/target/'+keys[0]] = items[keys[0]]
+        else:
+            import pdb; pdb.set_trace()
+
+        prjdir = config['project/topdir']
+        _write_project(prjdir)
+
     logging.debug('Leaving "survey_application_strace"')

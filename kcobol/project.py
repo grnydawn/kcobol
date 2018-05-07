@@ -24,6 +24,7 @@ def _write_project(prj_dir):
         os.makedirs(prj_dir)
     cfg = os.path.join(prj_dir, FILE_PROJECT)
     parser = configparser.RawConfigParser()
+    parser.optionxform = str
     if config.has_subtrie(u'prjconfig'):
         for sec in config.get_subkeys(u'prjconfig'):
             parser.add_section(sec)
@@ -36,6 +37,7 @@ def _read_project(prj_dir):
     cfg = os.path.join(prj_dir, FILE_PROJECT)
     if os.path.exists(cfg):
         parser = configparser.RawConfigParser()
+        parser.optionxform = str
         parser.read([cfg])
         rv = {}
         for section in parser.sections():
@@ -49,21 +51,22 @@ def initialize_project():
 
     outdir = config['opts/main/output']
     prjdir = os.path.join(outdir, ".kcobol")
+    config['project/topdir'] = prjdir
 
     # create directories and read projects
-    if os.path.exists(outdir):
-        if os.path.isdir(outdir):
-            if os.path.exists(prjdir):
-                if os.path.isdir(prjdir):
-                    _read_project(prjdir)
-                else:
-                    exit(-1, "'%s' is not a directory."%outdir)
-            else:
-                _write_project(prjdir)
-        else:
-            exit(-1, "'%s' is not a directory."%outdir)
-    else:
+    if not os.path.exists(outdir):
         os.makedirs(prjdir)
+
+    if os.path.isdir(outdir):
+        if os.path.exists(prjdir):
+            if os.path.isdir(prjdir):
+                _read_project(prjdir)
+            else:
+                exit(-1, "'%s' is not a directory."%outdir)
+        else:
+            _write_project(prjdir)
+    else:
+        exit(-1, "'%s' is not a directory."%outdir)
 
     # configuration setup
     subcmd = config['opts/main/subcommand']

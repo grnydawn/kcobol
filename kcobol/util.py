@@ -61,7 +61,7 @@ def hash_sha1(text):
 
 def istext(path):
     out = ''.join([l.strip() for l in runcmd('file '+path)])
-    return out.endswith('text')
+    return out.endswith('text') or out.endswith('text, with CRLF line terminators')
 
 def initialize_logging(outdir):
 

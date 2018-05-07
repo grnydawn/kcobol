@@ -30,6 +30,14 @@ def _collect_name(node, path, attrs):
         exit(exitno=1, msg='_collect_name: "name" key already exists.')
     attrs['name'] = path[0]
 
+def _collect_goback(node, path, attrs):
+    curnode = node
+    while curnode is not None:
+        if curnode.name == "Sentence":
+            curnode.goback_stmt = node.uppernode
+            break
+        curnode = curnode.uppernode
+
 # NOTE
 # - break as early as possible if not necessary
 
@@ -50,6 +58,12 @@ _operators = {
         'CobolWord': (_collect_name, _continue),
     },
 
+    #### EnvironmentDivision ####
+
+    'name_EnvironmentDivision': {
+        'ENVIRONMENT': _break,
+    },
+
     #### DataDivision ####
 
     'name_DataDivision': {
@@ -63,6 +77,9 @@ _operators = {
     'name_DataDescriptionEntryFormat1': {
         'INTEGERLITERAL': _break,
         'DataName': (_reg_name, _break),
+    },
+
+    'name_DataUsageClause': {
     },
 
     'name_DataName': {
@@ -102,7 +119,7 @@ _operators = {
     },
 
     'name_GobackStatement': {
-        'GOBACK': _break,
+        'GOBACK': _continue,
     },
 
     'name_PerformInlineStatement': {
@@ -152,6 +169,10 @@ _operators = {
     },
 
     'name_Sentence': {
+    },
+
+    'name_Statement': {
+        'GobackStatement': (_collect_goback, _break),
     },
 
     'name_RelationalOperator': {
