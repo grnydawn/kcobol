@@ -14,6 +14,31 @@ from .kcobol import on_main_command, on_extract_command
 from .project import initialize_project
 from .util import initialize_logging
 from .exception import InternalError, UsageError
+from contextlib import contextmanager
+
+
+@contextmanager
+def command_context():
+        try:
+            yield
+        except InternalError as err:
+            logging.critical(str(err))
+        except UsageError as err:
+            click.echo(main.get_help(ctx))
+            logging.critical(str(err))
+        except Exception as err:
+            exc_type, exc_obj, exc_tb = sys.exc_info()
+            tb_back = exc_tb
+            tb = exc_tb
+            while tb.tb_next is not None:
+                tb_back = tb
+                tb = tb.tb_next
+            fname_back = os.path.split(tb_back.tb_frame.f_code.co_filename)[1]
+            fname = os.path.split(tb.tb_frame.f_code.co_filename)[1]
+            logging.critical("[%s:%d<--%s:%d %s]  %s"%(fname, tb.tb_lineno,
+                fname_back, tb_back.tb_lineno, exc_type.__name__, str(exc_obj)))
+            sys.exit(-1)
+
 
 
 @click.group(invoke_without_command=True)
@@ -27,13 +52,19 @@ def main(ctx, debug, output):
     if ctx.invoked_subcommand is None:
         click.echo(ctx.get_help())
     else:
-        ctx.params['subcommand'] = subcmd = ctx.invoked_subcommand
-        initialize_logging(ctx.params[u'output'])
-        logging.info('==== Starting %s ====' % subcmd)
-        retcode = on_main_command(ctx.params)
-        if retcode == 0:
-            initialize_project()
-        return retcode
+
+        with command_context():
+            ctx.params['subcommand'] = subcmd = ctx.invoked_subcommand
+            outdir = ctx.params[u'output']
+            if not os.path.exists(outdir):
+                os.makedirs(outdir)
+            initialize_logging(outdir)
+            logging.info('==== Starting %s ====' % subcmd)
+            retcode = on_main_command(ctx.params)
+            if retcode == 0:
+                initialize_project()
+            return retcode
+
 
 @click.command()
 @click.argument(u'target', default=None, type=str,
@@ -48,15 +79,8 @@ def main(ctx, debug, output):
 def extract(ctx, target, clean, build, run):
     """extract a kerel from Cobol source codes."""
 
-    try:
+    with command_context():
         return on_extract_command(ctx.params)
-    except InternalError as err:
-        logging.critical(str(err))
-    except UsageError as err:
-        click.echo(main.get_help(ctx))
-        logging.critical(str(err))
-    finally:
-        pass
 
 # subcommands
 main.add_command(extract)

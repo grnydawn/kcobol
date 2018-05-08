@@ -124,7 +124,7 @@ def on_extract_command(opts):
 
     write_config()
 
-    import pdb; pdb.set_trace()
+    #import pdb; pdb.set_trace()
     logging.debug('Leaving "on_extract_command"')
     return 0
 

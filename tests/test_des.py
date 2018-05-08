@@ -15,7 +15,7 @@ basedir = os.path.dirname(__file__)
 # TODO: change srcdir to relative path, and output with temporary directory
 
 srcdir = "%s/cobol/des"%basedir
-output = "/home/youngsung/temp/kcoboltest"
+output = "/home/youngsung/temp/kcoboltest/des"
 source = "%s/testdes.cob"%srcdir
 clean = "cd %s;make clean"%srcdir
 build = "cd %s;make build"%srcdir

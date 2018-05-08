@@ -218,7 +218,7 @@ def survey_application_strace():
                     del config['prjconfig/build/read/'+path]
             elif syscall in ('execve',):
                 compiler = get_compiler(path, pwd, value)
-                if compiler is not None:
+                if compiler is not None and compiler.source is not None:
                     config['strace/build/compiler/%s'%compiler.source] = compiler
                     pickle_path = os.path.join(config['project/topdir'], hash_sha1(compiler.source))
                     with open(pickle_path,'wb') as f:
