@@ -198,13 +198,11 @@ def survey_application_strace():
     changed = [_file_sha1(path) != sha1 for path, sha1 in \
         config.get_subitems('prjconfig/build/read')]
 
+    # clean
+    for line in runcmd(config['opts/extract/clean']):
+        pass
+
     if len(changed) == 0 or any(changed):
-        # clean: unlink, unlinkat
-        for syscall, attr, value, pwd in _strace_run(config['opts/extract/clean']):
-            config['strace/clean/%s/%s'%(syscall, attr)] = value
-            if syscall in ('unlink', 'unlinkat'):
-                path = os.path.normpath(os.path.join(pwd, attr))
-                config['prjconfig/clean/unlink/%s'%path] = value
 
         # build: read, write
         for syscall, attr, value, pwd in _strace_run(config['opts/extract/build']):
@@ -234,6 +232,13 @@ def survey_application_strace():
                     if path == k:
                         config['prjconfig/run/%s/%s'%(syscall, path)] = v
                         break
+
+        # clean: unlink, unlinkat
+        for syscall, attr, value, pwd in _strace_run(config['opts/extract/clean']):
+            config['strace/clean/%s/%s'%(syscall, attr)] = value
+            if syscall in ('unlink', 'unlinkat'):
+                path = os.path.normpath(os.path.join(pwd, attr))
+                config['prjconfig/clean/unlink/%s'%path] = value
 
         # find an executable target
         # TODO: may or many not need to analyze linker command

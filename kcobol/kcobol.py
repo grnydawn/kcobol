@@ -9,13 +9,15 @@ import os
 import re
 import logging
 import click
-from stemtree import DFS_LF, UPWARDS, assemble_subtrees
+from stemtree import DFS_LF
 from stemcobol import EOF
 from .config import read_config, write_config, config
 from .reader import (read_target, collect_kernel_statements, remove_eof,
     )
-from .resolve import resolve, pre_resolve, post_resolve
-from .analyze import analyze, pre_analysis, post_analysis
+
+from .search import search
+from .resolve import pre_resolve, post_resolve
+from .analyze import pre_analyze, post_analyze
 from .assemble import assemble, pre_assemble, post_assemble, prune
 from .util import parse_kcobol_directive
 from .exception import InternalError
@@ -73,8 +75,10 @@ def on_extract_command(opts):
         # analyze kernel tree
         # 1. construct namespaces
         basket = {}
-        kernel_tree.search(analyze, DFS_LF, basket=basket, premove=pre_analysis,
-            postmove=post_analysis)
+        #kernel_tree.search(callsite, DFS_LF, basket=basket, premove=pre_callsite,
+        # TODO: use top node instead of kernel tree
+        kernel_tree.search(search, DFS_LF, basket=basket, premove=pre_analyze,
+            postmove=post_analyze)
 
         # resolve kernel nodes
         # 1. find resolving terminal nodes
@@ -82,7 +86,7 @@ def on_extract_command(opts):
         pre_resolve(kernel_nodes[0], basket)
         while basket['unknowns']:
             knode = basket['unknowns'].pop()
-            resolve(knode, basket)
+            knode.search(search, DFS_LF, basket=basket)
         post_resolve(kernel_nodes[0], basket)
 
         # append resolving nodes to kernel nodes
@@ -92,11 +96,7 @@ def on_extract_command(opts):
 
         # transform tree
 
-        # assemble subtrees
-        #subtrees = assemble_subtrees(kernel_nodes)
-
         # add frame nodes if needed
-
 
         kernel_tree.setattr_shared('knode', False)
 

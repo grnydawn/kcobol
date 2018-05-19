@@ -53,6 +53,9 @@ def initialize_project():
     prjdir = os.path.join(outdir, ".kcobol")
     config['project/topdir'] = prjdir
 
+    for subkey, subvalue in config.get_subitems('prjconfig'):
+        del config['prjconfig/'+subkey]
+
     # create directories and read projects
     if not os.path.exists(outdir):
         os.makedirs(prjdir)

@@ -11,9 +11,7 @@ import pickle
 from stemtree import Node
 from stemcobol import parse, EOF
 from .config import config
-from .tree import SourceLineTree
 from .application import survey_application_strace
-from .search import searchers, default_searcher
 from .util import exit, hash_sha1
 
 #_re_kcobol_begin = re.compile(r'\s*\*>\s+<\s*kcobol\s+(?P<command>[0-9_a-z]+)', re.I)
@@ -70,10 +68,25 @@ def parse_source(path, compiler):
     preprocess_source()
 
     # parse
+#    pickle_path = os.path.join(config['project/topdir'], hash_sha1('ast'+path))
+#
+#    if os.path.exists(pickle_path):
+#        with open(pickle_path, 'rb') as f:
+#            tree = pickle.load(f)
+#    else:
+#        tree = parse(path, compiler.format, compiler.standard)
     tree = parse(path, compiler.format, compiler.standard)
+
     if tree.subnodes[0].name == 'RunUnit' and \
         tree.subnodes[0].subnodes[0].name == 'CompilationUnit':
         tree.subnodes[0].subnodes[0].source_path = path
+
+#        if not os.path.exists(pickle_path):
+#            with open(pickle_path,'wb') as f:
+#                pickle.dump(tree, f)
+#
+#            config['prjconfig/build/ast/%s'%path] = pickle_path
+
         return tree
     else:
         return None

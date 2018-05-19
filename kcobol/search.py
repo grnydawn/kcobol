@@ -2,85 +2,70 @@
 from __future__ import (absolute_import, division,
                         print_function)
 from builtins import *
+from collections import OrderedDict
 
-from .exception import SearchError
+#from .exception import SearchError
+from .util import exit
 
-##################################################
-#   Common searchrs
-##################################################
-#def _subnode_index(node, org):
-#    for idx, subnode in enumerate(node.subnodes):
-#        if org is subnode:
-#            return idx
-#    return -1
-#
-#def _subnode_len(node):
-#    n = 0
-#    for sub in node.subnodes:
-#        if hasattr(sub, 'name') and sub.name != 'hidden':
-#            n += 1
-#    return n
-#
-#def _search(org, node, rpath):
-#    org.searchr_path = rpath[1:] + [node]
-#    node.kernel_index = org.kernel_index
-#    for uppernode in node.get_uppernodes():
-#        if uppernode.kernel_index < 0:
-#            uppernode.kernel_index = node.kernel_index
-#        elif uppernode.kernel_index != node.kernel_index:
-#            raise InternalError('Kernel index mismatch: %d != %d'%(\
-#                uppernode.kernel_index, node.kernel_index))
-#        else:
-#            break
-
-def default_searcher(node, rpath, basket):
-
-    org = rpath[0]
-    raise SearchError(org, node)
-
-def search_terminal(node, rpath, basket):
-
-    org = rpath[0]
-    raise SearchError(org, node)
-
-##################################################
-#  Resolvers
-##################################################
-
-def search_Sentence(node, rpath, basket):
-
-    org = rpath[0]
-
+def _debug(node, path, attrs):
     import pdb; pdb.set_trace()
-#    if hasattr(org, 'text') and org.text.strip() == '.':
-#        _subnode_index(node, org) == _subnode_len(node)-1:
-#        _search(org, node, rpath)
-#    else:
-#        raise SearchError(org, node)
 
-def search_Literal(node, rpath, basket):
+def _break(node, path, attrs):
+    return False
 
-    org = rpath[0]
+def _continue(node, path, attrs):
+    return True
 
-    import pdb; pdb.set_trace()
-#    if hasattr(org, 'name') and org.name == 'terminal' and \
-#        _subnode_index(node, org) == 0:
-#        _search(org, node, rpath)
-#    else:
-#        raise SearchError(org, node)
+def search(node, basket):
 
-def search_DisplayStatement(node, rpath, basket):
+    if node.name == 'hidden':
+        return
 
-    org = rpath[0]
+    if node.name == 'terminal':
 
-    import pdb; pdb.set_trace()
-#    if hasattr(org, 'text') and org.text.upper() == 'DISPLAY' and \
-#        _subnode_index(node, org) == 0:
-#        _search(org, node, rpath)
-#    else:
-#        raise SearchError(org, node)
+        path = [node]
+        node = node.uppernode
 
-searchers = {}
-for name, obj in dict(locals()).items():
-    if name.startswith('search_'):
-        searchers[name[7:]] = obj
+        task_attrs = {}
+        task_result = {}
+        for task in node.root.analysis_tasks:
+            task_attrs[task] = dict(basket)
+            task_result[task] = None
+
+
+        while node is not None:
+
+            for task in node.root.analysis_tasks:
+                if task_result[task] is False:
+                    continue
+                rulename = task + '_' + node.name
+
+                if rulename not in node.root.operators:
+                    exit(exitno=1, msg='Analyzer rule key, "%s", is not found.'%rulename)
+
+                subrules = node.root.operators[rulename]
+
+                if path[-1].name == 'terminal':
+
+                    if path[-1].token in node.root.skip_tokens:
+                        task_result[task] = False
+                    else:
+                        if path[-1].token not in subrules:
+                            exit(exitno=1, msg='Analyzer subrule token, "%s / %s",'
+                            ' is not found.'%(rulename, node.root.revtokenmap[path[-1].token]))
+                        for func in subrules[path[-1].token]:
+                            task_result[task] = func(node, path, task_attrs[task])
+                else:
+
+                    if path[-1].name not in subrules:
+                        exit(exitno=1, msg='Analyzer subrule name, "%s / %s", '
+                        'is not found.'%(rulename, path[-1].name))
+
+                    for func in subrules[path[-1].name]:
+                        task_result[task] = func(node, path, task_attrs[task])
+
+            if all(result is False for result in task_result.values()):
+                break
+            else:
+                path.append(node)
+                node = node.uppernode

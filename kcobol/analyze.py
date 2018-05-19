@@ -4,26 +4,24 @@ from __future__ import (absolute_import, division,
 from builtins import *
 from collections import OrderedDict
 
+from .search import _debug, _break, _continue
 from .exception import AnalyzeError
 from .util import exit
 
-analysis_tasks = (
+analyze_tasks = (
     'name',
 )
-
-def _debug(node, path, attrs):
-    import pdb; pdb.set_trace()
-
-def _break(node, path, attrs):
-    return False
-
-def _continue(node, path, attrs):
-    return True
 
 def _reg_name(node, path, attrs):
     if 'name' not in attrs:
         exit(exitno=1, msg='_reg_name at "%s": "name" key does not exists.'%node.name)
-    node.program_node.add_name(attrs['name'])
+    if node.program_node is None:
+        if node.name == "ProgramUnit":
+            node.add_name(attrs['name'])
+        else:
+            import pdb; pdb.set_trace()
+    else:
+        node.program_node.add_name(attrs['name'])
 
 def _collect_name(node, path, attrs):
     if 'name' in attrs:
@@ -40,127 +38,259 @@ def _collect_goback(node, path, attrs):
 
 # NOTE
 # - break as early as possible if not necessary
+# - collect name(terminal) as early as possible when it is clearly identified
 
 _operators = {
 
     #### IdentificationDivision ####
 
     'name_IdentificationDivision': {
-        'IDENTIFICATION': _break,
+        'IDENTIFICATION': [_break],
+#        'ProgramIdParagraph': _continue,
     },
 
     'name_ProgramIdParagraph': {
-        'PROGRAM_ID': _break,
-        'ProgramName': (_reg_name, _break),
+        'PROGRAM_ID': [_break],
+        'ProgramName': [_reg_name, _break],
     },
 
     'name_ProgramName': {
-        'CobolWord': (_collect_name, _continue),
+        'CobolWord': [_collect_name, _continue],
     },
 
     #### EnvironmentDivision ####
 
     'name_EnvironmentDivision': {
-        'ENVIRONMENT': _break,
+        'ENVIRONMENT': [_break],
     },
 
     #### DataDivision ####
 
     'name_DataDivision': {
-        'DATA': _break,
+        'DATA': [_break],
     },
 
     'name_WorkingStorageSection': {
-        'WORKING_STORAGE': _break,
+        'WORKING_STORAGE': [_break],
     },
 
     'name_DataDescriptionEntryFormat1': {
-        'INTEGERLITERAL': _break,
-        'DataName': (_reg_name, _break),
+        'INTEGERLITERAL': [_break],
+        'DataName': [_reg_name, _break],
+    },
+
+    'name_DataOccursClause': {
+        'OCCURS': [_break],
+    },
+
+    'name_DataRedefinesClause': {
+        'REDEFINES': [_break],
+        'DataName': [_break],
     },
 
     'name_DataUsageClause': {
+        'COMP_5': [_break],
     },
 
     'name_DataName': {
-        'CobolWord': (_collect_name, _continue),
+        'CobolWord': [_collect_name, _continue],
     },
 
     'name_DataPictureClause': {
-        'PIC': _break,
+        'PIC': [_break ],
     },
 
     'name_DataValueClause': {
-        'VALUE': _break,
+        'VALUE': [_break ],
     },
 
     'name_PictureChars': {
-        'IDENTIFIER': _break,
-        'LPARENCHAR': _break,
-        'RPARENCHAR': _break,
+        'IDENTIFIER': [_break ],
+        'LPARENCHAR': [_break ],
+        'RPARENCHAR': [_break ],
     },
 
     #### ProcedureDivision ####
 
     'name_ProcedureDivision': {
-        'PROCEDURE': _break,
+        'PROCEDURE': [_break ],
     },
 
-    'name_Paragraph': {
-        'ParagraphName': (_reg_name, _break),
+    'name_ProcedureSection': {
+#        'ProcedureSectionHeader': [_reg_name, _break],
+    },
+
+    'name_ProcedureSectionHeader': {
+        'SectionName': [_reg_name, _break],
+    },
+
+    'name_Sentence': {
+    },
+
+    'name_Statement': {
+        'GobackStatement': [_collect_goback, _break],
+    },
+
+    'name_InitializeStatement': {
+        'INITIALIZE': [_break ],
+        'Identifier': [_break ],
+        'InitializeReplacingPhrase': [_break ],
+    },
+
+    'name_CallStatement': {
+        'CALL': [_break ],
+        'END_CALL': [_break ],
+    },
+
+    'name_MoveStatement': {
+        'MOVE': [_break ],
+    },
+
+    'name_MoveToStatement': {
+        'TO': [_break ],
+        'Identifier': [_break ],
     },
 
     'name_PerformStatement': {
-        'PERFORM': _break,
+        'PERFORM': [_break ],
     },
 
     'name_DisplayStatement': {
-        'DISPLAY': _break,
+        'DISPLAY': [_break ],
+    },
+
+    'name_DivideStatement': {
+        'DIVIDE': [_break ],
+        'END_DIVIDE': [_break ],
+        'Identifier': [_break ],
+    },
+
+    'name_AddStatement': {
+        'ADD': [_break ],
+        'END_ADD': [_break ],
+        'Identifier': [_break ],
+    },
+
+    'name_AddToStatement': {
+        'TO': [_break ],
+    },
+
+    'name_DivideByGivingStatement': {
+        'BY': [_break ],
     },
 
     'name_GobackStatement': {
-        'GOBACK': _continue,
+        'GOBACK': [_continue ],
+    },
+
+    'name_PerformProcedureStatement': {
+        'THROUGH': [_break ],
+        'THRU': [_break ],
+        'ProcedureName': [_break ],
+        'PerformType': [_break ],
     },
 
     'name_PerformInlineStatement': {
-        'END_PERFORM': _break,
+        'END_PERFORM': [_break ],
+    },
+
+    'name_StopStatement': {
+        'STOP': [_break ],
+        'RUN': [_break ],
+    },
+
+    'name_ExitStatement': {
+        'EXIT': [_break ],
+        'PROGRAM': [_break ],
+    },
+
+    'name_DivideGivingPhrase': {
+        'GIVING': [_break ],
+    },
+
+    'name_DivideGiving': {
+        'ROUNDED': [_break ],
+        'Identifier': [_break ],
+    },
+
+    'name_DivideRemainder': {
+        'REMAINDER': [_break ],
+        'Identifier': [_break ],
+    },
+
+    'name_AddTo': {
+        'Identifier': [_break ],
+        'ROUNDED': [_break ],
+    },
+
+    'name_MoveToSendingArea': {
+        'Identifier': [_break ],
+        'Literal': [_break ],
     },
 
     'name_DisplayOperand': {
+        'Identifier': [_break ],
+    },
 
-        'Identifier': _break,
+    'name_ProcedureName': {
+        'ParagraphName': [_continue ],
     },
 
     'name_QualifiedDataName': {
-        'QualifiedDataNameFormat1': _continue,
+        'QualifiedDataNameFormat1': [_continue ],
     },
 
     'name_QualifiedDataNameFormat1': {
-        'DataName': _continue,
+        'DataName': [_continue ],
+#        'QualifiedInData': [_break ],
+    },
+
+#    'name_QualifiedInData': {
+#        'InData': [_break ],
+#        'InTable': [_break ],
+#    },
+
+    'name_InData': {
+        'IN': [_break ],
+        'OF': [_break ],
+        'DataName': [_break ],
     },
 
     'name_PerformVaryingClause': {
-        'VARYING': _break,
+        'VARYING': [_break ],
+    },
+
+    'name_CallUsingPhrase': {
+        'USING': [_break ],
+    },
+
+    'name_CallByReference': {
+        'ADDRESS': [_break ],
+        'OF': [_break ],
+        'INTEGER': [_break ],
+        'STRING': [_break ],
+        'OMITTED': [_break ],
+        'Identifier': [_break ],
     },
 
     'name_PerformVaryingPhrase': {
-        'Identifier': _break,
+        'Identifier': [_break ],
     },
 
     'name_PerformFrom': {
-        'FROM': _break,
+        'FROM': [_break ],
     },
 
     'name_PerformBy': {
-        'BY': _break,
+        'BY': [_break ],
     },
 
     'name_PerformUntil': {
-        'UNTIL': _break,
+        'UNTIL': [_break ],
     },
 
     'name_ParagraphName': {
-        'CobolWord': (_collect_name, _continue),
+        'CobolWord': [_collect_name, _continue],
     },
 
     #### Common ####
@@ -168,50 +298,77 @@ _operators = {
     'name_RunUnit': {
     },
 
-    'name_Sentence': {
+    'name_ProgramUnit': {
+#        'IdentificationDivision': [_reg_name, _break],
     },
 
-    'name_Statement': {
-        'GobackStatement': (_collect_goback, _break),
+    'name_Paragraph': {
+        'ParagraphName': [_reg_name, _break],
     },
 
     'name_RelationalOperator': {
-        'MORETHANCHAR': _break,
+        'IS': [_break ],
+        'ARE': [_break ],
+        'NOT': [_break ],
+        'GREATER': [_break ],
+        'THAN': [_break ],
+        'MORETHANCHAR': [_break ],
+        'LESS': [_break ],
+        'LESSTHANCHAR': [_break ],
+        'EQUAL': [_break ],
+        'TO': [_break ],
+        'EQUALCHAR': [_break ],
+        'NOTEQUALCHAR': [_break ],
+        'MORETHANOREQUAL': [_break ],
+        'OR': [_break ],
+        'LESSTHANOREQUAL': [_break ],
     },
 
+
     'name_Basis': {
-        'Identifier': _break,
+        'Identifier': [_break ],
     },
 
     'name_Identifier': {
-        'QualifiedDataName': _continue,
-        'TableCall': _continue,
+        'QualifiedDataName': [_continue ],
+        'TableCall': [_break ],
     },
 
     'name_TableCall': {
-        'QualifiedDataName': _continue,
+        'QualifiedDataName': [_break ],
+        'LPARENCHAR': [_break ],
+        'RPARENCHAR': [_break ],
+    },
+
+    'name_SectionName': {
+        'CobolWord': [_collect_name, _continue],
+    },
+
+    'name_Subscript': {
+        'ALL': [_break ],
+        'QualifiedDataName': [_break ],
     },
 
     'name_ReferenceModifier': {
-        'LPARENCHAR': _break,
-        'RPARENCHAR': _break,
-        'COLONCHAR': _break,
+        'LPARENCHAR': [_break ],
+        'RPARENCHAR': [_break ],
+        'COLONCHAR': [_break ],
     },
 
     'name_Literal': {
-        'NONNUMERICLITERAL': _break,
+        'NONNUMERICLITERAL': [_break ],
     },
 
     'name_IntegerLiteral': {
-        'INTEGERLITERAL': _break,
+        'INTEGERLITERAL': [_break ],
     },
 
     'name_CobolWord': {
-        'IDENTIFIER': _continue,
+        'IDENTIFIER': [_continue ]
     },
 }
 
-def pre_analysis(node, basket):
+def pre_analyze(node, basket):
 
     tokenmap = node.tokenmap
 
@@ -226,83 +383,32 @@ def pre_analysis(node, basket):
 
     ops = {}
     node.root.operators = ops
-    for pname, subprime in _operators.items():
+    for pname, snodes in _operators.items():
         subops = {}
         ops[pname] = subops
-        for sname, op in subprime.items():
+
+        for sname, op in snodes.items():
+
+            for task in analyze_tasks:
+                analyzer_name = "%s_%s_%s"%(task, pname, sname)
+                if analyzer_name in globals():
+                    op.insert(0, globals()[analyzer_name])
+
             if sname.isupper():
                 subops[tokenmap[sname]]= op
             else:
                 subops[sname]= op
 
+    node.root.analysis_tasks = analyze_tasks
+
     basket['entry_node'] = node
 
     return node
 
-def post_analysis(node, basket):
+def post_analyze(node, basket):
     entry_node = basket['entry_node']
     del entry_node.root.skip_tokens
+    del entry_node.root.analysis_tasks
     del entry_node.root.operators
     del entry_node.root.revtokenmap
     return node
-
-def analyze(node, basket):
-
-    if node.name == 'hidden':
-        return
-
-    if node.name == 'terminal':
-
-        path = [node]
-        node = node.uppernode
-
-        task_attrs = {}
-        task_result = {}
-        for task in analysis_tasks:
-            task_attrs[task] = {}
-            task_result[task] = None
-
-
-        while node is not None:
-
-            for task in analysis_tasks:
-                if task_result[task] is False:
-                    continue
-                rulename = task + '_' + node.name
-
-                if rulename not in node.root.operators:
-                    exit(exitno=1, msg='Analyzer rule key, "%s", is not found.'%rulename)
-
-                subrules = node.root.operators[rulename]
-
-                if path[-1].name == 'terminal':
-
-                    if path[-1].token in node.root.skip_tokens:
-                        task_result[task] = False
-                    else:
-                        if path[-1].token not in subrules:
-                            exit(exitno=1, msg='Analyzer subrule token, "%s / %s",'
-                            ' is not found.'%(rulename, node.root.revtokenmap[path[-1].token]))
-                        try:
-                            for func in subrules[path[-1].token]:
-                                task_result[task] = func(node, path, task_attrs[task])
-                        except TypeError:
-                            task_result[task] = subrules[path[-1].token](node, path, task_attrs[task])
-
-                else:
-
-                    if path[-1].name not in subrules:
-                        exit(exitno=1, msg='Analyzer subrule name, "%s / %s", '
-                        'is not found.'%(rulename, path[-1].name))
-
-                    try:
-                        for func in subrules[path[-1].name]:
-                            task_result[task] = func(node, path, task_attrs[task])
-                    except TypeError:
-                        task_result[task] = subrules[path[-1].name](node, path, task_attrs[task])
-
-            if all(result is False for result in task_result.values()):
-                break
-            else:
-                path.append(node)
-                node = node.uppernode

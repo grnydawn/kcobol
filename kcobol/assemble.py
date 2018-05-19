@@ -78,7 +78,7 @@ def _mark_and_check(node, path, attrs):
     _mark(node, path, attrs)
     return _check(node, path, attrs)
 
-def _dotfs(node, path, attrs):
+def _move_dotfs(node, path, attrs):
 
     def _find_last_terminal(snode, basket):
         if snode.name == "terminal":
@@ -140,7 +140,7 @@ def _mark_subnodes(node, path, attrs):
         yield subnode
 
 ###############################
-# assemblers
+# prerun assemblers
 ##############################
 
 def _CompilationUnit_ProgramUnit(node, path, attrs):
@@ -151,7 +151,8 @@ def _CompilationUnit_ProgramUnit(node, path, attrs):
 def _ProgramUnit_ProcedureDivision(node, path, attrs):
 
     for subnode in _mark_subnodes(node, path, attrs):
-        if subnode.name in ("IdentificationDivision", ):
+        if subnode.name in ("IdentificationDivision",
+            "EnvironmentDivision"):
             _mark_iddiv_subtree(subnode, path, attrs)
         elif subnode.name in ("DataDivision", ):
             pass
@@ -165,6 +166,14 @@ def _ProcedureDivision_ProcedureDivisionBody(node, path, attrs):
 
 def _ProcedureDivisionBody_Paragraphs(node, path, attrs):
     pass
+
+def _ProcedureSection_ProcedureSectionHeader(node, path, attrs):
+    idx = node.subnodes.index(path[-1])
+    node.subnodes[idx+1].knode = True # DOT_FS
+
+def _ProcedureSectionHeader_SectionName(node, path, attrs):
+    idx = node.subnodes.index(path[-1])
+    node.subnodes[idx+1].knode = True # SECTION
 
 def _Paragraphs_Paragraph(node, path, attrs):
     pass
@@ -205,10 +214,11 @@ def _DataDescriptionEntryFormat1_DataName(node, path, attrs):
 
 def _CobolWord_terminal(node, path, attrs):
 
-    for subnode in node. subnodes:
+    for subnode in node.subnodes:
         if subnode is path[-1]: continue
 
-        if subnode.name in ('hidden', ):
+        if subnode.name in ('hidden', ) or \
+            subnode.token in (node.tokenmap['DOT_FS'], ):
             subnode.knode = True
             continue
 
@@ -274,6 +284,9 @@ _operators = {
 #
 #    #### ProcedureDivision ####
 
+# NOTE: add terminal on non-terminal node that HAS the terminal node
+# TODO: assign callback with Node name and if mathced node name, run the callback
+
     'frame_ProcedureDivision': {
         'ProcedureDivisionBody': (_mark, _check),
     },
@@ -281,14 +294,30 @@ _operators = {
 
     'frame_ProcedureDivisionBody': {
         'Paragraphs': (_mark, _check),
+        'ProcedureSection': (_mark, _check),
     },
 
-#    'frame_Paragraph': {
-#        'ParagraphName': (_add_name, _break),
-#    },
-#
+    'frame_ProcedureSection': {
+        'Paragraphs': (_mark, _check),
+        'ProcedureSectionHeader': (_mark, _check),
+    },
+
+    'frame_ProcedureSectionHeader': {
+        'SectionName': (_mark, _check),
+        'IntegerLiteral': (_mark, _check),
+    },
+
+    'frame_Paragraph': {
+        'Sentence': (_mark, _check),
+    },
+
     'frame_PerformStatement': {
         'PERFORM': (_mark, _check),
+    },
+
+    'frame_PerformProcedureStatement': {
+        'ProcedureName': (_mark, _check),
+        'PerformType': (_mark, _check),
     },
 
     'frame_DisplayStatement': {
@@ -344,10 +373,12 @@ _operators = {
         'UNTIL': (_mark, _check),
     },
 
-#    'frame_ParagraphName': {
-#        'CobolWord': (_collect_name, _continue),
-#    },
-#
+    'frame_ProcedureName': {
+        'ParagraphName': (_mark, _check),
+        'InSection': (_mark, _check),
+        'SectionName': (_mark, _check),
+    },
+
     #### Common ####
 
     'frame_root': {
@@ -369,6 +400,7 @@ _operators = {
 
     'frame_Paragraphs': {
         'Paragraph': (_mark, _check),
+        'Sentence': (_mark, _check),
     },
 
     'frame_Paragraph': {
@@ -376,7 +408,7 @@ _operators = {
     },
 
     'frame_Sentence': {
-        'Statement': (_mark, _goback_stmt, _dotfs, _check),
+        'Statement': (_mark, _goback_stmt, _move_dotfs, _check),
     },
 
     'frame_Statement': {
@@ -431,6 +463,16 @@ _operators = {
     'frame_Basis': {
         'Identifier': (_mark, _check),
         'Literal': (_mark, _check),
+    },
+
+    'frame_SectionName': {
+        'CobolWord': (_mark, _check),
+        'IntegerLiteral': (_mark, _check),
+    },
+
+    'frame_ParagraphName': {
+        'CobolWord': (_mark, _check),
+        'IntegerLiteral': (_mark, _check),
     },
 
     'frame_Identifier': {
