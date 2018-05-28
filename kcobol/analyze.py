@@ -4,29 +4,72 @@ from __future__ import (absolute_import, division,
 from builtins import *
 from collections import OrderedDict
 
-from .search import _debug, _break, _continue
+from .search import _debug, _break, _continue, reg_search, has_search, push_search, pop_search
 from .exception import AnalyzeError
 from .util import exit
 
-analyze_tasks = (
+search_type = 'analyze'
+
+search_tasks = (
     'name',
 )
 
-def _reg_name(node, path, attrs):
-    if 'name' not in attrs:
-        exit(exitno=1, msg='_reg_name at "%s": "name" key does not exists.'%node.name)
-    if node.program_node is None:
-        if node.name == "ProgramUnit":
-            node.add_name(attrs['name'])
-        else:
-            import pdb; pdb.set_trace()
-    else:
-        node.program_node.add_name(attrs['name'])
+# ???NOTE: EntryFormat?: register name into program unit and continue to Entry
+# ???NOTE: Entry: regiter name if contains lower level EntryFormats
+# ??? How to handle order of Entries with different levels???
 
-def _collect_name(node, path, attrs):
+_namespace_nodes = {
+    "ProgramUnit": lambda n: n.compilationunit_node,
+    "ProcedureSection": lambda n: n.program_node,
+    "Paragraph": lambda n: n.program_node,
+    "DataDescriptionEntryFormat1": lambda n: n.program_node,
+}
+
+_blockentry_nodes = {
+    "DataDescriptionEntryFormat1": lambda s,n,o: _data_division_section_node(s,n,o),
+}
+
+def _data_division_section_node(start, node, org_node):
+    if hasattr(node, "name") and node.name == "DataDivisionSection":
+        if not hasattr(node, "structureentries"):
+            node.structureentries = {}
+        node.structureentries[start] = org_node
+        return node
+    elif hasattr(node, "uppernode"):
+        return _data_division_section_node(start, node.uppernode, org_node)
+    else:
+        return None
+
+def _reg_name(node, path, attrs):
+
+    if 'name' not in attrs:
+        exit(exitno=1, msg='_reg_name at "%s": "name" key does not exist.'%node.name)
+
+    namespace_node = _namespace_nodes[node.name](node)
+    namespace_node.add_name(attrs['name'].text, attrs['name'], node)
+
+def _push_name(node, path, attrs):
+
     if 'name' in attrs:
-        exit(exitno=1, msg='_collect_name: "name" key already exists.')
+        exit(exitno=1, msg='_push_name: "name" key already exists.')
+
     attrs['name'] = path[0]
+
+def _reg_start(node, path, attrs):
+
+    if 'start' not in attrs:
+        exit(exitno=1, msg='_reg_start at "%s": "start" key does not exist.'%node.name)
+
+    structure_node = _blockentry_nodes[node.name](attrs['start'], node, node)
+    if structure_node not in attrs['structure_nodes']:
+        attrs['structure_nodes'].append(structure_node)
+
+def _push_start(node, path, attrs):
+
+    if 'start' in attrs:
+        exit(exitno=1, msg='_push_start: "start" key already exists.')
+
+    attrs['start'] = path[0].start
 
 def _collect_goback(node, path, attrs):
     curnode = node
@@ -37,8 +80,7 @@ def _collect_goback(node, path, attrs):
         curnode = curnode.uppernode
 
 # NOTE
-# - break as early as possible if not necessary
-# - collect name(terminal) as early as possible when it is clearly identified
+# - collect name at the node that the name refers to: this is required because the referred node will be saved too.
 
 _operators = {
 
@@ -46,16 +88,16 @@ _operators = {
 
     'name_IdentificationDivision': {
         'IDENTIFICATION': [_break],
-#        'ProgramIdParagraph': _continue,
+        'ProgramIdParagraph': [_continue],
     },
 
     'name_ProgramIdParagraph': {
         'PROGRAM_ID': [_break],
-        'ProgramName': [_reg_name, _break],
+        'ProgramName': [_continue],
     },
 
     'name_ProgramName': {
-        'CobolWord': [_collect_name, _continue],
+        'CobolWord': [_push_name, _continue],
     },
 
     #### EnvironmentDivision ####
@@ -75,7 +117,7 @@ _operators = {
     },
 
     'name_DataDescriptionEntryFormat1': {
-        'INTEGERLITERAL': [_break],
+        'INTEGERLITERAL': [_push_start, _reg_start, _break],
         'DataName': [_reg_name, _break],
     },
 
@@ -93,7 +135,7 @@ _operators = {
     },
 
     'name_DataName': {
-        'CobolWord': [_collect_name, _continue],
+        'CobolWord': [_push_name, _continue],
     },
 
     'name_DataPictureClause': {
@@ -117,11 +159,11 @@ _operators = {
     },
 
     'name_ProcedureSection': {
-#        'ProcedureSectionHeader': [_reg_name, _break],
+        'ProcedureSectionHeader': [_reg_name, _break],
     },
 
     'name_ProcedureSectionHeader': {
-        'SectionName': [_reg_name, _break],
+        'SectionName': [_continue],
     },
 
     'name_Sentence': {
@@ -245,10 +287,10 @@ _operators = {
 #        'QualifiedInData': [_break ],
     },
 
-#    'name_QualifiedInData': {
-#        'InData': [_break ],
-#        'InTable': [_break ],
-#    },
+    'name_QualifiedInData': {
+        'InData': [_break ],
+        'InTable': [_break ],
+    },
 
     'name_InData': {
         'IN': [_break ],
@@ -290,7 +332,7 @@ _operators = {
     },
 
     'name_ParagraphName': {
-        'CobolWord': [_collect_name, _continue],
+        'CobolWord': [_push_name, _continue],
     },
 
     #### Common ####
@@ -299,7 +341,7 @@ _operators = {
     },
 
     'name_ProgramUnit': {
-#        'IdentificationDivision': [_reg_name, _break],
+        'IdentificationDivision': [_reg_name, _break],
     },
 
     'name_Paragraph': {
@@ -341,7 +383,7 @@ _operators = {
     },
 
     'name_SectionName': {
-        'CobolWord': [_collect_name, _continue],
+        'CobolWord': [_push_name, _continue],
     },
 
     'name_Subscript': {
@@ -370,45 +412,58 @@ _operators = {
 
 def pre_analyze(node, basket):
 
-    tokenmap = node.tokenmap
+    if not has_search(search_type):
 
-    node.root.revtokenmap = node.rtokenmap
+        ops = {}
+        for pname, snodes in _operators.items():
+            subops = {}
+            ops[pname] = subops
 
-    node.root.skip_tokens = (
-        tokenmap['DOT_FS'],
-        tokenmap['DIVISION'],
-        tokenmap['SECTION'],
-        -1, # EOF
-    )
+            for sname, op in snodes.items():
 
-    ops = {}
-    node.root.operators = ops
-    for pname, snodes in _operators.items():
-        subops = {}
-        ops[pname] = subops
+                for task in search_tasks:
+                    analyzer_name = "%s_%s_%s"%(task, pname, sname)
+                    if analyzer_name in globals():
+                        op.insert(0, globals()[analyzer_name])
 
-        for sname, op in snodes.items():
+                if sname.isupper():
+                    subops[node.tokenmap[sname]]= op
+                else:
+                    subops[sname]= op
 
-            for task in analyze_tasks:
-                analyzer_name = "%s_%s_%s"%(task, pname, sname)
-                if analyzer_name in globals():
-                    op.insert(0, globals()[analyzer_name])
+        reg_search(search_type, search_tasks, ops)
 
-            if sname.isupper():
-                subops[tokenmap[sname]]= op
-            else:
-                subops[sname]= op
-
-    node.root.analysis_tasks = analyze_tasks
-
-    basket['entry_node'] = node
+    push_search(search_type)
+    basket['structure_nodes'] = []
 
     return node
 
+
 def post_analyze(node, basket):
-    entry_node = basket['entry_node']
-    del entry_node.root.skip_tokens
-    del entry_node.root.analysis_tasks
-    del entry_node.root.operators
-    del entry_node.root.revtokenmap
+    stack = []
+    for snode in basket['structure_nodes']:
+        for start in sorted(snode.structureentries.keys()):
+
+            entry_node = snode.structureentries[start]
+            level_num = int(entry_node.subnodes[0].text)
+
+            while len(stack) > 0 and level_num < stack[-1][0]:
+                stack.pop()
+
+            if len(stack) == 0:
+                stack.append((level_num, entry_node))
+            elif level_num == stack[-1][0]:
+                if len(stack) > 1:
+                    stack[-2][1].subentries.append(entry_node)
+                stack[-1] = (level_num, entry_node)
+            else:
+                if not hasattr(stack[-1][1], "subentries"):
+                    stack[-1][1].subentries = []
+                stack[-1][1].subentries.append(entry_node)
+                stack.append((level_num, entry_node))
+
+    del basket['structure_nodes']
+
+    pop_search()
+
     return node

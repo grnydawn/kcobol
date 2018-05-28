@@ -29,6 +29,7 @@ def exit(exitno=0, msg="", usage=False):
         logging.critical(msg)
     else:
         logging.info(msg)
+        #import pdb; pdb.set_trace()
     sys.exit(exitno)
 
 def runcmd_old(cmd, cwd=None, env=None):

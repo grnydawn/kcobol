@@ -207,7 +207,8 @@ def _DataDescriptionEntryFormat1_DataName(node, path, attrs):
 
     for subnode in _mark_subnodes(node, path, attrs):
 
-        if subnode.name in ('DataPictureClause', 'DataValueClause'):
+        if subnode.name in ('DataPictureClause', 'DataValueClause',
+            'DataUsageClause', 'DataOccursClause'):
             _mark_subtree(subnode)
         else:
             import pdb; pdb.set_trace()

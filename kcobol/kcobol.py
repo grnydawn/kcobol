@@ -15,7 +15,7 @@ from .config import read_config, write_config, config
 from .reader import (read_target, collect_kernel_statements, remove_eof,
     )
 
-from .search import search
+from .search import search, initialize_search, finalize_search
 from .resolve import pre_resolve, post_resolve
 from .analyze import pre_analyze, post_analyze
 from .assemble import assemble, pre_assemble, post_assemble, prune
@@ -44,6 +44,9 @@ def on_extract_command(opts):
 
     # read target source file
     tree = read_target()
+
+    # initialize search library
+    initialize_search(tree)
 
     # collect kernel statements
     tree.setattr_shared('kernel_index', -1)
@@ -89,10 +92,13 @@ def on_extract_command(opts):
             knode.search(search, DFS_LF, basket=basket)
         post_resolve(kernel_nodes[0], basket)
 
+
         # append resolving nodes to kernel nodes
         for n in basket['nodes']:
             if n not in kernel_nodes:
                 kernel_nodes.append(n)
+
+        #import pdb; pdb.set_trace()
 
         # transform tree
 
@@ -121,6 +127,8 @@ def on_extract_command(opts):
 
         with open(outpath, 'w') as f:
             f.write(kernel_tree.tocobol(revise=remove_eof))
+
+    finalize_search()
 
     write_config()
 
