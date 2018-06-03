@@ -15,10 +15,10 @@ from .config import read_config, write_config, config
 from .reader import (read_target, collect_kernel_statements, remove_eof,
     )
 
-from .search import search, initialize_search, finalize_search
+from .scan import upward_scan, initialize_scan, finalize_scan
 from .resolve import pre_resolve, post_resolve
 from .analyze import pre_analyze, post_analyze
-from .assemble import assemble, pre_assemble, post_assemble, prune
+from .assemble import pre_assemble, post_assemble, prune
 from .util import parse_kcobol_directive
 from .exception import InternalError
 
@@ -46,7 +46,7 @@ def on_extract_command(opts):
     tree = read_target()
 
     # initialize search library
-    initialize_search(tree)
+    initialize_scan(tree)
 
     # collect kernel statements
     tree.setattr_shared('kernel_index', -1)
@@ -70,7 +70,7 @@ def on_extract_command(opts):
 
         if len(kernel_nodes) == 0: continue
 
-        #kernel_tree.kcobol_directive = kcobol_directive # directives
+        kernel_tree.kcobol_directive = kcobol_directive # directives
         #kernel_tree.kernel_nodes = kernel_nodes         # kernel nodes
         #kernel_tree.resolve_paths = []                  # resolving paths
         #kernel_tree.is_modified = False                 # is modified?
@@ -80,7 +80,7 @@ def on_extract_command(opts):
         basket = {}
         #kernel_tree.search(callsite, DFS_LF, basket=basket, premove=pre_callsite,
         # TODO: use top node instead of kernel tree
-        kernel_tree.search(search, DFS_LF, basket=basket, premove=pre_analyze,
+        kernel_tree.search(upward_scan, DFS_LF, basket=basket, premove=pre_analyze,
             postmove=post_analyze)
 
         # resolve kernel nodes
@@ -89,7 +89,7 @@ def on_extract_command(opts):
         pre_resolve(kernel_nodes[0], basket)
         while basket['unknowns']:
             knode = basket['unknowns'].pop()
-            knode.search(search, DFS_LF, basket=basket)
+            upward_scan(knode, basket)
         post_resolve(kernel_nodes[0], basket)
 
 
@@ -104,19 +104,19 @@ def on_extract_command(opts):
 
         # add frame nodes if needed
 
-        kernel_tree.setattr_shared('knode', False)
+        #kernel_tree.setattr_shared('knode', False)
 
         # assemble kernel nodes
         # 1. reconstruct a minimum cobol ast that contains kernel nodes
         basket = {}
         pre_assemble(kernel_nodes[0], basket)
         for knode in kernel_nodes:
-            assemble(knode, basket)
+            upward_scan(knode, basket)
         post_assemble(kernel_nodes[0], basket)
 
         # prune tree
         basket = {}
-        prune(kernel_tree, basket)
+        kernel_tree = prune(kernel_tree, basket)
 
         # write nodes into a file
         outfile = os.path.basename(config['opts/extract/target'])
@@ -128,7 +128,7 @@ def on_extract_command(opts):
         with open(outpath, 'w') as f:
             f.write(kernel_tree.tocobol(revise=remove_eof))
 
-    finalize_search()
+    finalize_scan()
 
     write_config()
 

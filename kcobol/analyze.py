@@ -4,13 +4,13 @@ from __future__ import (absolute_import, division,
 from builtins import *
 from collections import OrderedDict
 
-from .search import _debug, _break, _continue, reg_search, has_search, push_search, pop_search
+from .scan import _debug, _break, _continue, reg_scan, has_scan, push_scan, pop_scan
 from .exception import AnalyzeError
 from .util import exit
 
-search_type = 'analyze'
+scan_type = 'analyze'
 
-search_tasks = (
+scan_tasks = (
     'name',
 )
 
@@ -28,6 +28,9 @@ _namespace_nodes = {
 _blockentry_nodes = {
     "DataDescriptionEntryFormat1": lambda s,n,o: _data_division_section_node(s,n,o),
 }
+
+def hidden_task(node, basket):
+    pass
 
 def _data_division_section_node(start, node, org_node):
     if hasattr(node, "name") and node.name == "DataDivisionSection":
@@ -170,7 +173,8 @@ _operators = {
     },
 
     'name_Statement': {
-        'GobackStatement': [_collect_goback, _break],
+        #'GobackStatement': [_collect_goback, _break],
+        'GobackStatement': [_break],
     },
 
     'name_InitializeStatement': {
@@ -222,7 +226,8 @@ _operators = {
     },
 
     'name_GobackStatement': {
-        'GOBACK': [_continue ],
+        #'GOBACK': [_continue ],
+        'GOBACK': [_break ],
     },
 
     'name_PerformProcedureStatement': {
@@ -412,7 +417,7 @@ _operators = {
 
 def pre_analyze(node, basket):
 
-    if not has_search(search_type):
+    if not has_scan(scan_type):
 
         ops = {}
         for pname, snodes in _operators.items():
@@ -421,7 +426,7 @@ def pre_analyze(node, basket):
 
             for sname, op in snodes.items():
 
-                for task in search_tasks:
+                for task in scan_tasks:
                     analyzer_name = "%s_%s_%s"%(task, pname, sname)
                     if analyzer_name in globals():
                         op.insert(0, globals()[analyzer_name])
@@ -431,9 +436,9 @@ def pre_analyze(node, basket):
                 else:
                     subops[sname]= op
 
-        reg_search(search_type, search_tasks, ops)
+        reg_scan(scan_type, scan_tasks, ops, hidden_task)
 
-    push_search(search_type)
+    push_scan(scan_type)
     basket['structure_nodes'] = []
 
     return node
@@ -464,6 +469,6 @@ def post_analyze(node, basket):
 
     del basket['structure_nodes']
 
-    pop_search()
+    pop_scan()
 
     return node

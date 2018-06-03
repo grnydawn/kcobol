@@ -4,15 +4,19 @@ from __future__ import (absolute_import, division,
 from builtins import *
 from collections import OrderedDict
 
-from .search import _debug, _break, _continue, reg_search, has_search, push_search, pop_search
+from .scan import _debug, _break, _continue, reg_scan, has_scan, push_scan, pop_scan
 from .exception import AnalyzeError
 from .util import exit
 
-search_type = 'collect'
+scan_type = 'collect'
 
-search_tasks = (
+scan_tasks = (
     'collect',
 )
+
+
+def hidden_task(node, basket):
+    pass
 
 #
 #def _reg_name(node, path, attrs):
@@ -391,7 +395,7 @@ _operators = {
 
 def pre_collect(node, basket):
 
-    if not has_search(search_type):
+    if not has_scan(scan_type):
 
         ops = {}
         for pname, snodes in _operators.items():
@@ -400,7 +404,7 @@ def pre_collect(node, basket):
 
             for sname, op in snodes.items():
 
-                for task in search_tasks:
+                for task in scan_tasks:
                     collect_name = "%s_%s_%s"%(task, pname, sname)
                     if collect_name in globals():
                         op.insert(0, globals()[collect_name])
@@ -410,15 +414,15 @@ def pre_collect(node, basket):
                 else:
                     subops[sname]= op
 
-        reg_search(search_type, search_tasks, ops)
+        reg_scan(scan_type, scan_tasks, ops, hidden_task)
 
-    push_search(search_type)
+    push_scan(scan_type)
     basket['names'] = []
 
     return node
 
 
 def post_collect(node, basket):
-    pop_search()
+    pop_scan()
     return node
 

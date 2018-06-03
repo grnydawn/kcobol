@@ -1,610 +1,420 @@
 # -*- coding: utf-8 -*-
 from __future__ import (absolute_import, division,
                         print_function)
+import logging
 from builtins import *
 from collections import OrderedDict
 
-from stemtree import DFS_RF
+from stemtree import DFS_LF, Node
 
+from .scan import _debug, _break, _continue, reg_scan, has_scan, push_scan, pop_scan
 from .exception import AssembleError
 from .util import exit
 
-assemble_tasks = (
+scan_type = 'assemble'
+
+scan_tasks = (
     'frame',
 )
 
-
-###############################
-# debug
-##############################
-_debug_texts = tuple()
-#_debug_texts = ( 'W-COUNT', )
-
-def _debug(node, path, attrs):
-    import pdb; pdb.set_trace()
-
-def debugtree(node, level=0):
-    i = 0
-    while i < level:
-        i += 1
-        if node.uppernode is None:
-            break
-        else:
-            node = node.uppernode
-    print(node.treeview('text'))
-
-###############################
-# common assembler
-##############################
-
-def _mark_subtree(node):
-    node.knode = True
-    for subnode in node.subnodes:
-        _mark_subtree(subnode)
-
-def _mark_iddiv_subtree(node, path, attrs):
-
-    if node.name != "IdentificationDivision":
-        return
-
+def hidden_task(node, basket):
     node.knode = True
 
-    if hasattr(node, '__iddiv_processed__'):
-        return
+def _scan_mark(node, basket):
+    node.knode = True
 
-    node.__iddiv_processed__ = True
-
-    for subnode in _mark_subnodes(node, path, attrs):
-        if subnode.name in ("ProgramIdParagraph", ):
-            _mark_subtree(subnode)
-        else:
-            import pdb; pdb.set_trace()
-
-def _break(node, path, attrs):
-    return False
-
-def _continue(node, path, attrs):
-    return True
+def _scan_hidden_mark(node, basket):
+    if node.name == "hidden":
+        node.knode = True
 
 def _mark(node, path, attrs):
-    node.knode = True
+    path[-1].knode = True
 
-def _check(node, path, attrs):
-    if node.uppernode is None:
-        return False
-    return not node.uppernode.knode
+def _mark_first_subnode(node, path, attrs):
+    node.subnodes[0].search(_scan_mark, DFS_LF, stopnode=node)
 
-def _mark_and_check(node, path, attrs):
-    _mark(node, path, attrs)
-    return _check(node, path, attrs)
+def _mark_last_subnode(node, path, attrs):
+    node.subnodes[-1].search(_scan_mark, DFS_LF, stopnode=node)
 
-def _move_dotfs(node, path, attrs):
+def _mark_prev_subnode(node, path, attrs):
+    node.subnodes[node.subnodes.index(path[-1])-1].search(_scan_mark, DFS_LF, stopnode=node)
 
-    def _find_last_terminal(snode, basket):
-        if snode.name == "terminal":
-            basket['insert_after'] = snode
-            return snode.STOP_SEARCH
+def _mark_next_subnode(node, path, attrs):
+    node.subnodes[node.subnodes.index(path[-1])+1].search(_scan_mark, DFS_LF, stopnode=node)
 
-    def _add_dotfs(snode, basket):
-        tnode = basket['insert_after']
-        dotfs = basket['dotfs']
-        if tnode.token != node.tokenmap['DOT_FS']:
-            tnode.uppernode.insert_after(tnode, dotfs)
+def _mark_terminal_subnodes(node, path, attrs):
+    for subnode in node.subnodes:
+        if subnode.name == "terminal":
+            subnode.knode = True
 
-    last = None
-    dotfs = None
-    for idx, subnode in enumerate(node.subnodes):
+def _mark_hidden_subnodes(node, path, attrs):
+    for subnode in node.subnodes:
         if subnode.name == "hidden":
-            pass
-        elif subnode.name == "terminal":
-            if subnode.token == node.tokenmap['DOT_FS']:
-                dotfs = idx
-                break
-        elif subnode.knode is True:
-            last = idx
-
-    if last is not None and dotfs is not None:
-        dotfs_node = node.subnodes.pop(dotfs)
-        last_node = node.subnodes[last]
-        basket = {'dotfs': dotfs_node}
-        last_node.search(_find_last_terminal, DFS_RF, basket=basket,
-            postmove=_add_dotfs)
-
-def _goback_stmt(node, path, attrs):
-    if node.knode is True:
-        if hasattr(node, 'goback_stmt') and node.goback_stmt is not None:
-            _mark_subtree(node.goback_stmt)
-
-#def _collect_name(node, path, attrs):
-#    if 'name' in attrs:
-#        exit(exitno=1, msg='_collect_name: "name" key already exists.')
-#    attrs['name'] = path[0]
-#
-#def _add_name(node, path, attrs):
-#    if 'name' not in attrs:
-#        exit(exitno=1, msg='_add_name at "%s": "name" key does not exists.'%node.name)
-#    node.program_node.add_name(attrs['name'])
-
-# NOTE
-# - break as early as possible if not necessary
-
-def _mark_subnodes(node, path, attrs):
-
-    for subnode in node.subnodes:
-        if subnode is path[-1]: continue
-
-        if subnode.name in ('hidden', 'terminal'):
-            subnode.knode = True
-            continue
-
-        yield subnode
-
-###############################
-# prerun assemblers
-##############################
-
-def _CompilationUnit_ProgramUnit(node, path, attrs):
-
-    for subnode in _mark_subnodes(node, path, attrs):
-        pass
-
-def _ProgramUnit_ProcedureDivision(node, path, attrs):
-
-    for subnode in _mark_subnodes(node, path, attrs):
-        if subnode.name in ("IdentificationDivision",
-            "EnvironmentDivision"):
-            _mark_iddiv_subtree(subnode, path, attrs)
-        elif subnode.name in ("DataDivision", ):
-            pass
-        else:
-            import pdb; pdb.set_trace()
-
-def _ProcedureDivision_ProcedureDivisionBody(node, path, attrs):
-
-    for subnode in _mark_subnodes(node, path, attrs):
-        import pdb; pdb.set_trace()
-
-def _ProcedureDivisionBody_Paragraphs(node, path, attrs):
-    pass
-
-def _ProcedureSection_ProcedureSectionHeader(node, path, attrs):
-    idx = node.subnodes.index(path[-1])
-    node.subnodes[idx+1].knode = True # DOT_FS
-
-def _ProcedureSectionHeader_SectionName(node, path, attrs):
-    idx = node.subnodes.index(path[-1])
-    node.subnodes[idx+1].knode = True # SECTION
-
-def _Paragraphs_Paragraph(node, path, attrs):
-    pass
-
-def _Paragraph_Sentence(node, path, attrs):
-
-    for subnode in _mark_subnodes(node, path, attrs):
-        if subnode.name == "ParagraphName":
-            _mark_subtree(subnode)
-        elif subnode.name in ("Sentence", "AlteredGoTo"):
-            continue
-        else:
-            import pdb; pdb.set_trace()
-
-def _Sentence_Statement(node, path, attrs):
-    for subnode in node.subnodes:
-        if subnode.name != 'Statement':
             subnode.knode = True
 
-def _DataDivision_DataDivisionSection(node, path, attrs):
+def _mark_text_subnodes(node, path, attrs):
+    _mark_terminal_subnodes(node, None, None)
+    _mark_hidden_subnodes(node, None, None)
 
-    for subnode in _mark_subnodes(node, path, attrs):
-        pass
+def _mark_id_division(node, path, attrs):
 
-def _WorkingStorageSection_DataDescriptionEntry(node, path, attrs):
+    id_division = node.subnodes[0]
+    id_division.search(_scan_mark, DFS_LF, stopnode=node)
 
-    for subnode in _mark_subnodes(node, path, attrs):
-        pass
-
-def _DataDescriptionEntryFormat1_DataName(node, path, attrs):
-
-    for subnode in _mark_subnodes(node, path, attrs):
-
-        if subnode.name in ('DataPictureClause', 'DataValueClause',
-            'DataUsageClause', 'DataOccursClause'):
-            _mark_subtree(subnode)
-        else:
-            import pdb; pdb.set_trace()
-
-def _CobolWord_terminal(node, path, attrs):
-
+def _mark_data_descentry_format1(node, path, attrs):
     for subnode in node.subnodes:
-        if subnode is path[-1]: continue
-
-        if subnode.name in ('hidden', ) or \
-            subnode.token in (node.tokenmap['DOT_FS'], ):
-            subnode.knode = True
-            continue
-
-        import pdb; pdb.set_trace()
+        if subnode.name in ('DataPictureClause',
+            'DataValueClause'):
+            subnode.search(_scan_mark, DFS_LF, stopnode=node)
+    #import pdb; pdb.set_trace()
 
 _operators = {
 
-#    #### IdentificationDivision ####
-#
-#    'frame_IdentificationDivision': {
-#        'IDENTIFICATION': _break,
-#    },
-#
-#    'frame_ProgramIdParagraph': {
-#        'PROGRAM_ID': _break,
-#        'ProgramName': (_add_name, _break),
-#    },
-#
-#    'frame_ProgramName': {
-#        'CobolWord': (_collect_name, _continue),
-#    },
-#
+    #### IdentificationDivision ####
+
     #### DataDivision ####
 
     'frame_DataDivision': {
-        'DataDivisionSection': (_mark, _check),
+        'DataDivisionSection': [_mark, _mark_text_subnodes, _continue],
     },
 
     'frame_DataDivisionSection': {
-        'WorkingStorageSection': (_mark, _check),
+        'WorkingStorageSection': [_mark, _continue],
     },
 
     'frame_WorkingStorageSection': {
-        'DataDescriptionEntry': (_mark, _check),
+        'DataDescriptionEntry': [_mark, _mark_text_subnodes, _continue],
     },
 
     'frame_DataDescriptionEntry': {
-        'DataDescriptionEntryFormat1': (_mark, _check),
+        'DataDescriptionEntryFormat1': [_mark, _continue],
     },
 
     'frame_DataDescriptionEntryFormat1': {
-#        'INTEGERLITERAL': _break,
-        'DataName': (_mark, _check),
+        'INTEGERLITERAL': [_mark, _continue],
+        'DataName': [_mark, _mark_data_descentry_format1, _mark_text_subnodes, _continue],
+        'DataPictureClause': [_mark, _mark_text_subnodes, _continue],
+        'DataValueClause': [_mark, _mark_text_subnodes, _continue],
     },
 
-    'frame_DataName': {
-        'CobolWord': (_mark, _check),
+    'frame_DataValueClause': {
+        'VALUE': [_mark, _continue],
+        'DataValueInterval': [_mark, _mark_text_subnodes, _continue],
     },
-#
-#    'frame_DataPictureClause': {
-#        'PIC': _break,
-#    },
-#
-#    'frame_DataValueClause': {
-#        'VALUE': _break,
-#    },
-#
-#    'frame_PictureChars': {
-#        'IDENTIFIER': _break,
-#        'LPARENCHAR': _break,
-#        'RPARENCHAR': _break,
-#    },
-#
-#    #### ProcedureDivision ####
 
-# NOTE: add terminal on non-terminal node that HAS the terminal node
-# TODO: assign callback with Node name and if mathced node name, run the callback
+    'frame_DataPictureClause': {
+        'PIC': [_mark, _continue],
+        'PictureString': [_mark, _mark_text_subnodes, _continue],
+    },
+
+    'frame_PictureString': {
+        'PictureChars': [_mark, _continue],
+    },
+
+    'frame_PictureChars': {
+        'LPARENCHAR': [_mark, _continue],
+        'RPARENCHAR': [_mark, _continue],
+        'IDENTIFIER': [_mark, _continue],
+        'IntegerLiteral': [_mark, _mark_text_subnodes, _continue],
+    },
+
+    'frame_DataValueInterval': {
+        'DataValueIntervalFrom': [_mark, _continue],
+    },
+
+    'frame_DataValueIntervalFrom': {
+        'Literal': [_mark, _continue],
+        'CobolWord': [_mark, _continue],
+    },
+
+    #### ProcedureDivision ####
 
     'frame_ProcedureDivision': {
-        'ProcedureDivisionBody': (_mark, _check),
+        'PROCEDURE': [_mark, _continue],
+        'ProcedureDivisionBody': [_mark, _mark_text_subnodes, _continue],
     },
-
 
     'frame_ProcedureDivisionBody': {
-        'Paragraphs': (_mark, _check),
-        'ProcedureSection': (_mark, _check),
-    },
-
-    'frame_ProcedureSection': {
-        'Paragraphs': (_mark, _check),
-        'ProcedureSectionHeader': (_mark, _check),
-    },
-
-    'frame_ProcedureSectionHeader': {
-        'SectionName': (_mark, _check),
-        'IntegerLiteral': (_mark, _check),
-    },
-
-    'frame_Paragraph': {
-        'Sentence': (_mark, _check),
-    },
-
-    'frame_PerformStatement': {
-        'PERFORM': (_mark, _check),
-    },
-
-    'frame_PerformProcedureStatement': {
-        'ProcedureName': (_mark, _check),
-        'PerformType': (_mark, _check),
+        'Paragraphs': [_mark, _continue],
     },
 
     'frame_DisplayStatement': {
-        'DISPLAY': (_mark, _check),
+        'DISPLAY': [_mark, _continue],
+        'DisplayOperand': [_mark, _mark_first_subnode, _continue],
     },
-#
-#    'frame_GobackStatement': {
-#        'GOBACK': _break,
-#    },
-#
+
+    'frame_PerformStatement': {
+        'PERFORM': [_mark, _continue],
+        'PerformInlineStatement': [_mark, _mark_first_subnode, _continue],
+    },
+
+    'frame_GobackStatement': {
+        'GOBACK': [_mark, _continue],
+    },
+
     'frame_PerformInlineStatement': {
-        'PerformType': (_mark, _check),
-        'END_PERFORM': (_mark, _check),
-    },
-
-    'frame_DisplayOperand': {
-        'Identifier': (_mark, _check),
-    },
-
-    'frame_QualifiedDataName': {
-        'QualifiedDataNameFormat1': (_mark, _check),
-    },
-
-    'frame_QualifiedDataNameFormat1': {
-        'DataName': (_mark, _check),
+        'PerformType': [_mark, _mark_last_subnode, _continue],
+        'Statement': [_mark, _mark_last_subnode, _continue],
+        'END_PERFORM': [_mark, _continue],
     },
 
     'frame_PerformType': {
-        'PerformVarying': (_mark, _check),
+        'PerformVarying': [_mark, _continue],
     },
 
     'frame_PerformVarying': {
-        'PerformVaryingClause': (_mark, _check),
+        'PerformVaryingClause': [_mark, _continue],
     },
 
     'frame_PerformVaryingClause': {
-        'VARYING': (_mark, _check),
+        'VARYING': [_mark, _continue],
+        'PerformVaryingPhrase': [_mark, _mark_first_subnode, _continue],
     },
 
     'frame_PerformVaryingPhrase': {
-        'Identifier': (_mark, _check),
+        'Identifier': [_mark, _continue],
+        'PerformFrom': [_mark, _continue],
+        'PerformBy': [_mark, _continue],
+        'PerformUntil': [_mark, _continue],
     },
 
     'frame_PerformFrom': {
-        'FROM': (_mark, _check),
+        'FROM': [_mark, _continue],
+        'Literal': [_mark, _mark_first_subnode, _continue],
     },
 
     'frame_PerformBy': {
-        'BY': (_mark, _check),
+        'BY': [_mark, _continue],
+        'Literal': [_mark, _mark_first_subnode, _continue],
+    },
+
+    'frame_PerformAfter': {
+        'AFTER': [_mark, _continue],
+        'Literal': [_mark, _mark_first_subnode, _continue],
     },
 
     'frame_PerformUntil': {
-        'UNTIL': (_mark, _check),
+        'UNTIL': [_mark, _continue],
+        'Literal': [_mark, _mark_terminal_subnodes, _continue],
+        'Condition': [_mark, _mark_terminal_subnodes, _continue],
     },
 
-    'frame_ProcedureName': {
-        'ParagraphName': (_mark, _check),
-        'InSection': (_mark, _check),
-        'SectionName': (_mark, _check),
+    'frame_DisplayOperand': {
+        'Identifier': [_mark, _continue],
+        'Literal': [_mark, _continue],
     },
 
     #### Common ####
 
     'frame_root': {
-        'RunUnit': (_mark, _check),
+        'RunUnit': [_mark, _continue],
     },
 
     'frame_RunUnit': {
-        'CompilationUnit': (_mark, _check),
+        'CompilationUnit': [_mark, _continue],
     },
 
     'frame_CompilationUnit': {
-        'ProgramUnit': (_mark, _check),
+        'ProgramUnit': [_mark, _mark_hidden_subnodes, _continue],
     },
 
     'frame_ProgramUnit': {
-        'ProcedureDivision': (_mark, _check),
+        'ProcedureDivision': [_mark, _mark_id_division, _continue],
+        'DataDivision': [_mark, _continue],
     },
 
-
     'frame_Paragraphs': {
-        'Paragraph': (_mark, _check),
-        'Sentence': (_mark, _check),
+        'Paragraph': [_mark, _continue],
     },
 
     'frame_Paragraph': {
-        'Sentence': (_mark, _check),
+        'ParagraphName': [_mark, _mark_terminal_subnodes, _continue],
+        'Sentence': [_mark, _mark_first_subnode, _mark_terminal_subnodes, _continue],
     },
 
     'frame_Sentence': {
-        'Statement': (_mark, _goback_stmt, _move_dotfs, _check),
+        'Statement': [_mark, _continue],
     },
 
     'frame_Statement': {
-        'PerformStatement': (_mark, _check),
-        'DisplayStatement': (_mark, _check),
-    },
-
-    'frame_RelationalOperator': {
-        'MORETHANCHAR': (_mark, _check),
+        'PerformStatement': [_mark, _continue],
+        'DisplayStatement': [_mark, _continue],
+        'GobackStatement': [_mark, _continue],
     },
 
     'frame_Condition': {
-        'CombinableCondition': (_mark, _check),
+        'CombinableCondition': [_mark, _continue],
     },
 
     'frame_CombinableCondition': {
-        'SimpleCondition': (_mark, _check),
+        'SimpleCondition': [_mark, _continue],
     },
 
     'frame_SimpleCondition': {
-        'RelationCondition': (_mark, _check),
+        'RelationCondition': [_mark, _continue],
     },
 
     'frame_RelationCondition': {
-        'RelationArithmeticComparison': (_mark, _check),
+        'RelationArithmeticComparison': [_mark, _continue],
     },
 
     'frame_RelationArithmeticComparison': {
-        'ArithmeticExpression': (_mark, _check),
+        'ArithmeticExpression': [_mark, _continue],
+        'RelationalOperator': [_mark, _continue],
     },
 
-    'frame_Length': {
-        'ArithmeticExpression': (_mark, _check),
-    },
-
-    'frame_CharacterPosition': {
-        'ArithmeticExpression': (_mark, _check),
+    'frame_RelationalOperator': {
+        'MORETHANCHAR': [_mark, _continue],
     },
 
     'frame_ArithmeticExpression': {
-        'MultDivs': (_mark, _check),
+        'MultDivs': [_mark, _continue],
     },
 
     'frame_MultDivs': {
-        'Powers': (_mark, _check),
+        'Powers': [_mark, _continue],
     },
 
     'frame_Powers': {
-        'Basis': (_mark, _check),
+        'Basis': [_mark, _mark_terminal_subnodes, _continue],
     },
 
     'frame_Basis': {
-        'Identifier': (_mark, _check),
-        'Literal': (_mark, _check),
-    },
-
-    'frame_SectionName': {
-        'CobolWord': (_mark, _check),
-        'IntegerLiteral': (_mark, _check),
-    },
-
-    'frame_ParagraphName': {
-        'CobolWord': (_mark, _check),
-        'IntegerLiteral': (_mark, _check),
+        'LPARENCHAR': [_mark, _continue],
+        'RPARENCHAR': [_mark, _continue],
+        'Identifier': [_mark, _mark_terminal_subnodes, _continue],
+        'Literal': [_mark, _mark_terminal_subnodes, _continue],
     },
 
     'frame_Identifier': {
-        'QualifiedDataName': (_mark, _check),
-        'TableCall': (_mark, _check),
+        'QualifiedDataName': [_mark, _continue],
+        'TableCall': [_mark, _continue],
     },
 
     'frame_TableCall': {
-        'QualifiedDataName': (_mark, _check),
+        'QualifiedDataName': [_mark, _continue],
+        'ReferenceModifier': [_mark, _continue],
+    },
+
+    'frame_QualifiedDataName': {
+        'QualifiedDataNameFormat1': [_mark, _continue],
+    },
+
+    'frame_QualifiedDataNameFormat1': {
+        'DataName': [_mark, _continue],
     },
 
     'frame_ReferenceModifier': {
-        'LPARENCHAR': (_mark, _check),
-        'RPARENCHAR': (_mark, _check),
-        'COLONCHAR': (_mark, _check),
+        'LPARENCHAR': [_mark, _continue],
+        'RPARENCHAR': [_mark, _continue],
+        'COLONCHAR': [_mark, _continue],
+        'CharacterPosition': [_mark, _mark_next_subnode,_continue],
+        'Length': [_mark, _continue],
     },
 
-    'frame_Literal': {
-        'NumericLiteral': (_mark, _check),
+    'frame_CharacterPosition': {
+        'ArithmeticExpression': [_mark, _continue],
     },
 
-    'frame_NumericLiteral': {
-        'IntegerLiteral': (_mark, _check),
+    'frame_Length': {
+        'ArithmeticExpression': [_mark, _continue],
     },
 
-    'frame_IntegerLiteral': {
-        'INTEGERLITERAL': (_mark, _check),
+    'frame_ParagraphName': {
+        'CobolWord': [_mark, _continue],
+        'IntegerLiteral': [_mark, _continue],
+    },
+
+    'frame_DataName': {
+        'CobolWord': [_mark, _continue],
     },
 
     'frame_CobolWord': {
-        'IDENTIFIER': (_mark, _check),
+        'IDENTIFIER': [_mark, _mark_hidden_subnodes, _continue],
     },
+
+    'frame_Literal': {
+        'NumericLiteral': [_mark, _continue],
+        'NONNUMERICLITERAL': [_mark, _mark_hidden_subnodes, _continue],
+    },
+
+    'frame_NumericLiteral': {
+        'IntegerLiteral': [_mark, _continue],
+    },
+
+    'frame_IntegerLiteral': {
+        'INTEGERLITERAL': [_mark, _mark_hidden_subnodes, _continue],
+    },
+
 }
+
 
 def pre_assemble(node, basket):
 
-    tokenmap = node.tokenmap
+    if not has_scan(scan_type):
 
-    node.root.revtokenmap = node.rtokenmap
+        ops = {}
+        for pname, snodes in _operators.items():
+            subops = {}
+            ops[pname] = subops
 
-    ops = {}
-    node.root.operators = ops
-    for pname, subprime in _operators.items():
-        subops = {}
-        ops[pname] = subops
-        for sname, op in subprime.items():
-            if sname.isupper():
-                subops[tokenmap[sname]]= op
-            else:
-                subops[sname]= op
+            for sname, op in snodes.items():
 
-    basket['entry_node'] = node
+                for task in scan_tasks:
+                    analyzer_name = "%s_%s_%s"%(task, pname, sname)
+                    if analyzer_name in globals():
+                        op.insert(0, globals()[analyzer_name])
+
+                if sname.isupper():
+                    subops[node.tokenmap[sname]]= op
+                else:
+                    subops[sname]= op
+
+        reg_scan(scan_type, scan_tasks, ops, hidden_task)
+
+    push_scan(scan_type)
 
     return node
+
+
+def _insert_goback_statement(endnode):
+
+    goback_terminal_node = Node()
+    goback_statement_node = Node()
+
+    goback_terminal_node.knode = True
+    goback_terminal_node.name = "terminal"
+    goback_terminal_node.text = "\n           GOBACK."
+    goback_terminal_node.token = 1
+    goback_terminal_node.uppernode = goback_statement_node
+
+    goback_statement_node.knode = True
+    goback_statement_node.name = "GobackStatement"
+    del goback_statement_node.subnodes[:]
+    goback_statement_node.subnodes.append(goback_terminal_node)
+
+    endnode.insert_after(goback_statement_node)
 
 def post_assemble(node, basket):
-    entry_node = basket['entry_node']
-    del entry_node.root.operators
-    del entry_node.root.revtokenmap
+
+
+    dirtype, dirattrs, dirbegin, dirend = node.root.kcobol_directive
+
+    assert dirtype == "extract"
+
+    # process dirbegin
+    for subnode in dirbegin.uppernode.subnodes:
+        if subnode is dirbegin:
+            break
+        subnode.search(_scan_hidden_mark, DFS_LF, stopnode=subnode)
+
+    # process dirend
+    _insert_goback_statement(dirend)
+
+    pop_scan()
+
     return node
 
-def assemble(node, basket):
-
-    node.knode = True
-
-    if node.name == 'hidden':
-        return
-
-    if node.name == 'terminal':
-
-        if node.text in _debug_texts:
-            import pdb; pdb.set_trace()
-
-        path = [node]
-        node = node.uppernode
-
-        task_attrs = {}
-        task_result = {}
-        for task in assemble_tasks:
-            task_attrs[task] = {}
-            task_result[task] = None
-
-
-        while node is not None:
-
-            for task in assemble_tasks:
-                if task_result[task] is False:
-                    continue
-                rulename = task + '_' + node.name
-
-                if rulename not in node.root.operators:
-                    exit(exitno=1, msg='Assembler rule key, "%s", is not found.'%rulename)
-
-                subrules = node.root.operators[rulename]
-
-                assembler_name = "_%s_%s"%(node.name, path[-1].name)
-                if assembler_name in globals():
-                    task_result[task] = globals()[assembler_name](node, path, task_attrs[task])
-
-                if path[-1].name == 'terminal':
-
-                    if path[-1].token not in subrules:
-                        exit(exitno=1, msg='Assembler subrule token, "%s / %s",'
-                        ' is not found.'%(rulename, node.root.revtokenmap[path[-1].token]))
-                    try:
-                        for func in subrules[path[-1].token]:
-                            task_result[task] = func(node, path, task_attrs[task])
-                    except TypeError:
-                        task_result[task] = subrules[path[-1].token](node, path, task_attrs[task])
-
-                else:
-
-                    if path[-1].name not in subrules:
-                        exit(exitno=1, msg='Assembler subrule name, "%s / %s", '
-                        'is not found.'%(rulename, path[-1].name))
-
-                    try:
-                        for func in subrules[path[-1].name]:
-                            task_result[task] = func(node, path, task_attrs[task])
-                    except TypeError:
-                        task_result[task] = subrules[path[-1].name](node, path, task_attrs[task])
-
-            if all(result is False for result in task_result.values()):
-                break
-            else:
-                path.append(node)
-                node = node.uppernode
-
 def prune(node, basket):
-    #node.subnodes = [prune(snode, basket) for snode in node.subnodes
-    #    if snode.knode is True or snode.name == 'hidden']
-    node.subnodes = [prune(s, basket) for s in node.subnodes if s.knode is True]
-
+    node.subnodes = [prune(s, basket) for s in node.subnodes if hasattr(s, 'knode') and s.knode is True]
     return node

@@ -7,7 +7,7 @@ from builtins import *
 from collections import OrderedDict
 
 from stemtree import DFS_LF
-from .search import _debug, _break, _continue, search, reg_search, has_search, push_search, pop_search
+from .scan import _debug, _break, _continue, upward_scan, reg_scan, has_scan, push_scan, pop_scan
 from .collect import pre_collect, post_collect
 from .exception import ResolveError
 from .util import exit
@@ -17,14 +17,17 @@ from .util import exit
 # NOTE: There may be other cases that name is not definite at first
 # NOTE: may ignore subscript in TableCall
 
-search_type = 'resolve'
+scan_type = 'resolve'
 
-resolve_tasks = (
+scan_tasks = (
     'resolve',
 )
 
 _cache = {}
 _resolved = {}
+
+def hidden_task(node, basket):
+    pass
 
 def _push_name(node, path, attrs):
     if 'name' in attrs:
@@ -62,8 +65,8 @@ def _resolve_node(node, namepath, attrs):
         attrs['nodes'].add(res_terminal)
         if res_node not in _resolved:
             collect_basket = {}
-            res_node.search(search, DFS_LF, basket=collect_basket, premove=pre_collect,
-                postmove=post_collect)
+            res_node.search(upward_scan, DFS_LF, basket=collect_basket, premove=pre_collect,
+            postmove=post_collect, stopnode=res_node)
             _resolved[res_node] = None
             for n in collect_basket['names']:
                 attrs['unknowns'].add(n)
@@ -384,7 +387,7 @@ def pre_resolve(node, basket):
 
     _cache.clear()
 
-    if not has_search(search_type):
+    if not has_scan(scan_type):
 
         ops = {}
         for pname, snodes in _operators.items():
@@ -393,7 +396,7 @@ def pre_resolve(node, basket):
 
             for sname, op in snodes.items():
 
-                for task in resolve_tasks:
+                for task in scan_tasks:
                     resolve_name = "%s_%s_%s"%(task, pname, sname)
                     if resolve_name in globals():
                         op.insert(0, globals()[resolve_name])
@@ -403,13 +406,13 @@ def pre_resolve(node, basket):
                 else:
                     subops[sname]= op
 
-        reg_search(search_type, resolve_tasks, ops)
+        reg_scan(scan_type, scan_tasks, ops, hidden_task)
 
-    push_search(search_type)
+    push_scan(scan_type)
 
     return node
 
 
 def post_resolve(node, basket):
-    pop_search()
+    pop_scan()
     return node
