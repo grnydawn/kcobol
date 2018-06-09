@@ -86,11 +86,11 @@
     DISPLAY " "
     DISPLAY "encryption..."
      
+*> <kcobol extract name=dbih
     CALL "COBDES" USING COBDES-LNK
 
 *>  convert in hexa
     MOVE DATA-BUFF OF COBDES-LNK TO WS-NUM-DATA
-*> <kcobol extract name=dbih
     PERFORM DATA-BUFF-IN-HEXA
 *> /kcobol>
     

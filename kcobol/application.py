@@ -202,6 +202,8 @@ def survey_application_strace():
     for line in runcmd(config['opts/extract/clean']):
         pass
 
+    changed = []
+
     if len(changed) == 0 or any(changed):
 
         # build: read, write

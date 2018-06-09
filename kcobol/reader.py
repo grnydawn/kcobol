@@ -11,6 +11,7 @@ import pickle
 from stemtree import Node
 from stemcobol import parse, EOF
 from .config import config
+from .source import get_source
 from .application import survey_application_strace
 from .util import exit, hash_sha1
 
@@ -60,36 +61,36 @@ def _parse_argument():
         exit(-1, msg=u"'run' command is not found..", usage=True)
 
 
-def preprocess_source():
-    pass
+def parse_source(path, compiler, root=None):
 
-def parse_source(path, compiler):
-
-    preprocess_source()
+    source = get_source(path, compiler)
 
     # parse
-#    pickle_path = os.path.join(config['project/topdir'], hash_sha1('ast'+path))
-#
-#    if os.path.exists(pickle_path):
-#        with open(pickle_path, 'rb') as f:
-#            tree = pickle.load(f)
-#    else:
-#        tree = parse(path, compiler.format, compiler.standard)
-    tree = parse(path, compiler.format, compiler.standard)
+    pickle_path = os.path.join(config['project/topdir'], hash_sha1('ast'+path))
 
-    if tree.subnodes[0].name == 'RunUnit' and \
-        tree.subnodes[0].subnodes[0].name == 'CompilationUnit':
-        tree.subnodes[0].subnodes[0].source_path = path
-
-#        if not os.path.exists(pickle_path):
-#            with open(pickle_path,'wb') as f:
-#                pickle.dump(tree, f)
-#
-#            config['prjconfig/build/ast/%s'%path] = pickle_path
-
-        return tree
+    if os.path.exists(pickle_path):
+        with open(pickle_path, 'rb') as f:
+            root = pickle.load(f)
     else:
-        return None
+        #tree = parse(path, compiler.format, compiler.standard)
+        root = parse(source.path, source.format, source.standard, config['opts/main/output'], root=root)
+#    root = parse(source.path, source.format, source.standard, config['opts/main/output'], root=root)
+
+#    import pdb; pdb.set_trace()
+
+    if root.subnodes[0].name == 'RunUnit' and \
+        root.subnodes[0].subnodes[0].name == 'CompilationUnit':
+        root.subnodes[0].subnodes[0].source_path = path
+
+        if not os.path.exists(pickle_path):
+            with open(pickle_path,'wb') as f:
+                pickle.dump(root, f)
+
+            config['prjconfig/build/ast/%s'%path] = pickle_path
+
+        return root, root.subnodes[0].subnodes[0]
+
+    return root, None
 
 
 def read_target():

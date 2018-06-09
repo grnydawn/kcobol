@@ -11,7 +11,7 @@ from abc import ABCMeta, abstractmethod, abstractproperty
 from stemcobol import FREE_FORMAT, FIXED_FORMAT, VARIABLE_FORMAT
 
 from .config import config
-from .util import runcmd, hash_sha1, istext
+from .util import runcmd, hash_sha1, istext, re_ws, re_dotfs
 
 # TODO: handles combining multiple options as one line -lr???
 # one dash : can combine multiple options, just keep adding them
@@ -19,7 +19,10 @@ from .util import runcmd, hash_sha1, istext
 # two dashes : no cobining feature, search if it can find only one option
 #             if multiple options found, display it
 
-_re_cobol_src = re.compile(r'(ID|IDENTIFICATION)\s+DIVISION\s*\.', re.I)
+
+iddiv_pattern = r"(I{0}D|I{0}D{0}E{0}N{0}T{0}I{0}F{0}I{0}C{0}A{0}T{0}I{0}O{0}N){0}D{0}I{0}V{0}I{0}S{0}I{0}O{0}N{0}{1}"
+progid_pattern = r"P{0}R{0}O{0}G{0}R{0}A{0}M{0}-{0}I{0}D{0}{1}{0}(?P<progid>[a-z0-9]+([-_]+[a-z0-9]+)*)"
+_re_cobol_src = re.compile((iddiv_pattern+progid_pattern).format(re_ws, re_dotfs), re.I)
 
 class COBOLCompiler(object):
 
@@ -52,7 +55,12 @@ class COBOLCompiler(object):
             return False
 
         with open(path) as f:
-            return True if _re_cobol_src.search(f.read()) else False
+            match = _re_cobol_src.search(f.read())
+            if match:
+                config[u"prjconfig/source/%s"%match.group('progid')] = path
+                return True
+            else:
+                return False
 
 class GnuCOBOL(COBOLCompiler):
 

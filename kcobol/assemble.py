@@ -17,11 +17,58 @@ scan_tasks = (
     'frame',
 )
 
+def _first_terminal_subnode(node):
+
+    first_subnode = None
+    for subnode in node.subnodes:
+        if subnode.name == "terminal":
+            first_subnode = subnode
+            break
+    return first_subnode
+
+def _last_terminal_subnode(node):
+
+    last_subnode = None
+    for subnode in reversed(node.subnodes):
+        if subnode.name == "terminal":
+            last_subnode = subnode
+            break
+    return last_subnode
+
+def _next_terminal_subnode(node, prev_node):
+
+    next_subnode = None
+    for subnode in node.subnodes:
+        if subnode is prev_node:
+            next_subnode = subnode
+        elif next_subnode is not None:
+            next_subnode = subnode
+            if subnode.name == "terminal":
+                break
+    return next_subnode
+
+def _prev_terminal_subnode(node, next_node):
+
+    prev_subnode = None
+    for subnode in reversed(node.subnodes):
+        if subnode is next_node:
+            prev_subnode = subnode
+        elif prev_subnode is not None:
+            prev_subnode = subnode
+            if subnode.name == "terminal":
+                break
+    return prev_subnode
+
 def hidden_task(node, basket):
     node.knode = True
 
 def _scan_mark(node, basket):
     node.knode = True
+
+def _upward_mark(node, basket):
+    while hasattr(node, 'uppernode'):
+        node.knode = True
+        node = node.uppernode
 
 def _scan_hidden_mark(node, basket):
     if node.name == "hidden":
@@ -31,16 +78,20 @@ def _mark(node, path, attrs):
     path[-1].knode = True
 
 def _mark_first_subnode(node, path, attrs):
-    node.subnodes[0].search(_scan_mark, DFS_LF, stopnode=node)
+    first_subnode = _first_terminal_subnode(node)
+    first_subnode.search(_scan_mark, DFS_LF, stopnode=node)
 
 def _mark_last_subnode(node, path, attrs):
-    node.subnodes[-1].search(_scan_mark, DFS_LF, stopnode=node)
+    last_subnode = _last_terminal_subnode(node)
+    last_subnode.search(_scan_mark, DFS_LF, stopnode=node)
 
 def _mark_prev_subnode(node, path, attrs):
-    node.subnodes[node.subnodes.index(path[-1])-1].search(_scan_mark, DFS_LF, stopnode=node)
+    prev_subnode = _prev_terminal_subnode(node, path[-1])
+    prev_subnode.search(_scan_mark, DFS_LF, stopnode=node)
 
 def _mark_next_subnode(node, path, attrs):
-    node.subnodes[node.subnodes.index(path[-1])+1].search(_scan_mark, DFS_LF, stopnode=node)
+    next_subnode = _next_terminal_subnode(node, path[-1])
+    next_subnode.search(_scan_mark, DFS_LF, stopnode=node)
 
 def _mark_terminal_subnodes(node, path, attrs):
     for subnode in node.subnodes:
@@ -51,10 +102,6 @@ def _mark_hidden_subnodes(node, path, attrs):
     for subnode in node.subnodes:
         if subnode.name == "hidden":
             subnode.knode = True
-
-def _mark_text_subnodes(node, path, attrs):
-    _mark_terminal_subnodes(node, None, None)
-    _mark_hidden_subnodes(node, None, None)
 
 def _mark_id_division(node, path, attrs):
 
@@ -75,275 +122,474 @@ _operators = {
     #### DataDivision ####
 
     'frame_DataDivision': {
-        'DataDivisionSection': [_mark, _mark_text_subnodes, _continue],
+        'DataDivisionSection': [_mark_terminal_subnodes],
     },
 
     'frame_DataDivisionSection': {
-        'WorkingStorageSection': [_mark, _continue],
+        'WorkingStorageSection': [],
     },
 
     'frame_WorkingStorageSection': {
-        'DataDescriptionEntry': [_mark, _mark_text_subnodes, _continue],
+        'DataDescriptionEntry': [_mark_terminal_subnodes],
     },
 
     'frame_DataDescriptionEntry': {
-        'DataDescriptionEntryFormat1': [_mark, _continue],
+        'DataDescriptionEntryFormat1': [],
     },
 
     'frame_DataDescriptionEntryFormat1': {
-        'INTEGERLITERAL': [_mark, _continue],
-        'DataName': [_mark, _mark_data_descentry_format1, _mark_text_subnodes, _continue],
-        'DataPictureClause': [_mark, _mark_text_subnodes, _continue],
-        'DataValueClause': [_mark, _mark_text_subnodes, _continue],
+        'INTEGERLITERAL': [],
+        'DataName': [_mark_data_descentry_format1, _mark_terminal_subnodes],
+        'DataPictureClause': [_mark_terminal_subnodes],
+        'DataUsageClause': [_mark_terminal_subnodes],
+        'DataValueClause': [_mark_terminal_subnodes],
+        'DataOccursClause': [_mark_terminal_subnodes],
     },
 
     'frame_DataValueClause': {
-        'VALUE': [_mark, _continue],
-        'DataValueInterval': [_mark, _mark_text_subnodes, _continue],
+        'VALUE': [],
+        'DataValueInterval': [_mark_terminal_subnodes],
     },
 
     'frame_DataPictureClause': {
-        'PIC': [_mark, _continue],
-        'PictureString': [_mark, _mark_text_subnodes, _continue],
+        'PIC': [],
+        'PictureString': [_mark_terminal_subnodes],
+    },
+
+    'frame_DataUsageClause': {
+        'COMP_5': [],
+        'END_DIVIDE': [],
+    },
+
+    'frame_DataOccursClause': {
+        'OCCURS': [],
+        'IntegerLiteral': [],
     },
 
     'frame_PictureString': {
-        'PictureChars': [_mark, _continue],
+        'PictureChars': [],
     },
 
     'frame_PictureChars': {
-        'LPARENCHAR': [_mark, _continue],
-        'RPARENCHAR': [_mark, _continue],
-        'IDENTIFIER': [_mark, _continue],
-        'IntegerLiteral': [_mark, _mark_text_subnodes, _continue],
+        'LPARENCHAR': [],
+        'RPARENCHAR': [],
+        'IDENTIFIER': [],
+        'IntegerLiteral': [_mark_terminal_subnodes],
     },
 
     'frame_DataValueInterval': {
-        'DataValueIntervalFrom': [_mark, _continue],
+        'DataValueIntervalFrom': [],
     },
 
     'frame_DataValueIntervalFrom': {
-        'Literal': [_mark, _continue],
-        'CobolWord': [_mark, _continue],
+        'Literal': [],
+        'CobolWord': [],
     },
 
     #### ProcedureDivision ####
 
     'frame_ProcedureDivision': {
-        'PROCEDURE': [_mark, _continue],
-        'ProcedureDivisionBody': [_mark, _mark_text_subnodes, _continue],
+        'PROCEDURE': [],
+        'ProcedureDivisionBody': [_mark_terminal_subnodes],
     },
 
     'frame_ProcedureDivisionBody': {
-        'Paragraphs': [_mark, _continue],
+        'Paragraphs': [],
+        'ProcedureSection': [],
     },
 
     'frame_DisplayStatement': {
-        'DISPLAY': [_mark, _continue],
-        'DisplayOperand': [_mark, _mark_first_subnode, _continue],
+        'DISPLAY': [],
+        'DisplayOperand': [_mark_first_subnode],
     },
 
     'frame_PerformStatement': {
-        'PERFORM': [_mark, _continue],
-        'PerformInlineStatement': [_mark, _mark_first_subnode, _continue],
+        'PERFORM': [],
+        'PerformInlineStatement': [_mark_first_subnode],
+        'PerformProcedureStatement': [_mark_first_subnode],
+    },
+
+    'frame_MoveStatement': {
+        'MOVE': [],
+        'ALL': [],
+        'MoveToStatement': [_mark_terminal_subnodes],
+        'MoveCorrespondingToStatement': [_mark_terminal_subnodes],
+    },
+
+#   : CALL (identifier | literal) callUsingPhrase? callGivingPhrase? onOverflowPhrase? onExceptionClause? notOnExceptionClause? END_CALL?
+
+
+    'frame_CallStatement': {
+        'CALL': [],
+        'Identifier': [],
+        'Literal': [],
+        'CallUsingPhrase': [],
+        'END_CALL': [],
+    },
+
+    'frame_InitializeStatement': {
+        'INITIALIZE': [],
+        'Identifier': [_mark_first_subnode],
+        'InitializeReplacingPhrase': [_mark_first_subnode],
+    },
+
+    'frame_ExitStatement': {
+        'EXIT': [],
+        'PROGRAM': [],
+    },
+
+    'frame_MoveToStatement': {
+        'MoveToSendingArea': [_mark_next_subnode],
+        'TO': [],
+        'Identifier': [_mark_prev_subnode],
+    },
+
+    'frame_AddStatement': {
+        'ADD': [],
+        'AddToStatement': [_mark_first_subnode],
+    },
+
+    'frame_AddToStatement': {
+        'AddFrom': [_mark_next_subnode],
+        'TO': [],
+        'AddTo': [_mark_prev_subnode],
+    },
+
+    'frame_PerformProcedureStatement': {
+        'ProcedureName': [_mark_terminal_subnodes],
+        'THROUGH': [],
+        'THRU': [],
+        'PerformType': [],
+    },
+
+    'frame_DivideStatement': {
+        'DIVIDE': [],
+        'END_DIVIDE': [],
+        'Identifier': [_mark_first_subnode],
+        'Literal': [_mark_first_subnode],
+        'DivideByGivingStatement': [_mark_first_subnode],
+        'DivideRemainder': [_mark_first_subnode],
     },
 
     'frame_GobackStatement': {
-        'GOBACK': [_mark, _continue],
+        'GOBACK': [],
+    },
+
+    'frame_StopStatement': {
+        'STOP': [],
+        'RUN': [],
+        'Literal': [],
     },
 
     'frame_PerformInlineStatement': {
-        'PerformType': [_mark, _mark_last_subnode, _continue],
-        'Statement': [_mark, _mark_last_subnode, _continue],
-        'END_PERFORM': [_mark, _continue],
+        'PerformType': [_mark_last_subnode],
+        'Statement': [_mark_last_subnode],
+        'END_PERFORM': [],
+    },
+
+    'frame_DivideByGivingStatement': {
+        'BY': [],
+        'Identifier': [_mark_first_subnode],
+        'Literal': [_mark_first_subnode],
+        'DivideGivingPhrase': [_mark_first_subnode],
+    },
+
+    'frame_ProcedureSection': {
+        'ProcedureSectionHeader': [_mark_next_subnode],
+        'Paragraphs': [_mark_prev_subnode],
+    },
+
+    'frame_ProcedureSectionHeader': {
+        'SectionName': [_mark_terminal_subnodes],
+        'SECTION': [],
+        'IntegerLiteral': [],
     },
 
     'frame_PerformType': {
-        'PerformVarying': [_mark, _continue],
+        'PerformVarying': [],
     },
 
     'frame_PerformVarying': {
-        'PerformVaryingClause': [_mark, _continue],
+        'PerformVaryingClause': [],
     },
 
     'frame_PerformVaryingClause': {
-        'VARYING': [_mark, _continue],
-        'PerformVaryingPhrase': [_mark, _mark_first_subnode, _continue],
+        'VARYING': [],
+        'PerformVaryingPhrase': [_mark_first_subnode],
     },
 
     'frame_PerformVaryingPhrase': {
-        'Identifier': [_mark, _continue],
-        'PerformFrom': [_mark, _continue],
-        'PerformBy': [_mark, _continue],
-        'PerformUntil': [_mark, _continue],
+        'Identifier': [],
+        'PerformFrom': [],
+        'PerformBy': [],
+        'PerformUntil': [],
+    },
+
+    'frame_CallUsingParameter': {
+        'CallByReferencePhrase': [],
+        'CallByValuePhrase': [],
+        'CallByContentPhrase': [],
+    },
+
+    'frame_CallUsingPhrase': {
+        'USING': [],
+        'CallUsingParameter': [],
+    },
+
+    'frame_CallByReferencePhrase': {
+        'BY': [],
+        'REFERENCE': [],
+        'CallByReference': [],
     },
 
     'frame_PerformFrom': {
-        'FROM': [_mark, _continue],
-        'Literal': [_mark, _mark_first_subnode, _continue],
+        'FROM': [],
+        'Literal': [_mark_first_subnode],
     },
 
     'frame_PerformBy': {
-        'BY': [_mark, _continue],
-        'Literal': [_mark, _mark_first_subnode, _continue],
+        'BY': [],
+        'Literal': [_mark_first_subnode],
     },
 
     'frame_PerformAfter': {
-        'AFTER': [_mark, _continue],
-        'Literal': [_mark, _mark_first_subnode, _continue],
+        'AFTER': [],
+        'Literal': [_mark_first_subnode],
     },
 
     'frame_PerformUntil': {
-        'UNTIL': [_mark, _continue],
-        'Literal': [_mark, _mark_terminal_subnodes, _continue],
-        'Condition': [_mark, _mark_terminal_subnodes, _continue],
+        'UNTIL': [],
+        'Literal': [_mark_terminal_subnodes],
+        'Condition': [_mark_terminal_subnodes],
     },
 
     'frame_DisplayOperand': {
-        'Identifier': [_mark, _continue],
-        'Literal': [_mark, _continue],
+        'Identifier': [],
+        'Literal': [],
     },
+
+    'frame_DivideGivingPhrase': {
+        'GIVING': [],
+        'DivideGiving': [_mark_first_subnode],
+    },
+
+    'frame_DivideGiving': {
+        'Identifier': [],
+        'ROUNDED': [],
+    },
+
+    'frame_DivideRemainder': {
+        'REMAINDER': [],
+        'Identifier': [],
+    },
+
+    'frame_MoveToSendingArea': {
+        'Identifier': [],
+        'Literal': [],
+    },
+
+    'frame_AddFrom': {
+        'Identifier': [],
+        'Literal': [],
+    },
+
+    'frame_AddTo': {
+        'Identifier': [],
+        'ROUNDED': [],
+    },
+
+    'frame_CallByReference': {
+        'ADDRESS': [],
+        'OF': [],
+        'INTEGER': [],
+        'STRING': [],
+        'Identifier': [],
+        'Literal': [],
+        'FileName': [],
+        'OMITTED': [],
+    },
+
+    'frame_QualifiedInData': {
+        'InData': [],
+        'InTable': [],
+    },
+
+    'frame_InData': {
+        'IN': [],
+        'OF': [],
+        'DataName': [],
+    },
+
 
     #### Common ####
 
     'frame_root': {
-        'RunUnit': [_mark, _continue],
+        'RunUnit': [],
     },
 
     'frame_RunUnit': {
-        'CompilationUnit': [_mark, _continue],
+        'CompilationUnit': [],
     },
 
     'frame_CompilationUnit': {
-        'ProgramUnit': [_mark, _mark_hidden_subnodes, _continue],
+        'ProgramUnit': [],
     },
 
     'frame_ProgramUnit': {
-        'ProcedureDivision': [_mark, _mark_id_division, _continue],
-        'DataDivision': [_mark, _continue],
+        'ProcedureDivision': [_mark_id_division],
+        'DataDivision': [],
     },
 
     'frame_Paragraphs': {
-        'Paragraph': [_mark, _continue],
+        'Paragraph': [],
+        'Sentence': [],
     },
 
     'frame_Paragraph': {
-        'ParagraphName': [_mark, _mark_terminal_subnodes, _continue],
-        'Sentence': [_mark, _mark_first_subnode, _mark_terminal_subnodes, _continue],
+        'ParagraphName': [_mark_terminal_subnodes],
+        'Sentence': [_mark_first_subnode, _mark_terminal_subnodes],
     },
 
     'frame_Sentence': {
-        'Statement': [_mark, _continue],
+        'Statement': [_mark_last_subnode],
     },
 
     'frame_Statement': {
-        'PerformStatement': [_mark, _continue],
-        'DisplayStatement': [_mark, _continue],
-        'GobackStatement': [_mark, _continue],
+        'PerformStatement': [],
+        'DisplayStatement': [],
+        'MoveStatement': [],
+        'AddStatement': [],
+        'DivideStatement': [],
+        'InitializeStatement': [],
+        'GobackStatement': [],
+        'CallStatement': [],
+        'ExitStatement': [],
+        'StopStatement': [],
     },
 
     'frame_Condition': {
-        'CombinableCondition': [_mark, _continue],
+        'CombinableCondition': [],
     },
 
     'frame_CombinableCondition': {
-        'SimpleCondition': [_mark, _continue],
+        'SimpleCondition': [],
     },
 
     'frame_SimpleCondition': {
-        'RelationCondition': [_mark, _continue],
+        'RelationCondition': [],
     },
 
     'frame_RelationCondition': {
-        'RelationArithmeticComparison': [_mark, _continue],
+        'RelationArithmeticComparison': [],
     },
 
     'frame_RelationArithmeticComparison': {
-        'ArithmeticExpression': [_mark, _continue],
-        'RelationalOperator': [_mark, _continue],
+        'ArithmeticExpression': [],
+        'RelationalOperator': [],
     },
 
     'frame_RelationalOperator': {
-        'MORETHANCHAR': [_mark, _continue],
+        'MORETHANCHAR': [],
+        'LESSTHANCHAR': [],
+    },
+
+    'frame_Subscript': {
+        'ALL': [],
+        'QualifiedDataName': [],
     },
 
     'frame_ArithmeticExpression': {
-        'MultDivs': [_mark, _continue],
+        'MultDivs': [],
     },
 
     'frame_MultDivs': {
-        'Powers': [_mark, _continue],
+        'Powers': [],
     },
 
     'frame_Powers': {
-        'Basis': [_mark, _mark_terminal_subnodes, _continue],
+        'Basis': [_mark_terminal_subnodes],
     },
 
     'frame_Basis': {
-        'LPARENCHAR': [_mark, _continue],
-        'RPARENCHAR': [_mark, _continue],
-        'Identifier': [_mark, _mark_terminal_subnodes, _continue],
-        'Literal': [_mark, _mark_terminal_subnodes, _continue],
+        'LPARENCHAR': [],
+        'RPARENCHAR': [],
+        'Identifier': [_mark_terminal_subnodes],
+        'Literal': [_mark_terminal_subnodes],
     },
 
     'frame_Identifier': {
-        'QualifiedDataName': [_mark, _continue],
-        'TableCall': [_mark, _continue],
+        'QualifiedDataName': [],
+        'TableCall': [],
     },
 
     'frame_TableCall': {
-        'QualifiedDataName': [_mark, _continue],
-        'ReferenceModifier': [_mark, _continue],
+        'LPARENCHAR': [],
+        'RPARENCHAR': [],
+        'QualifiedDataName': [],
+        'ReferenceModifier': [],
+        'Subscript': [],
     },
 
     'frame_QualifiedDataName': {
-        'QualifiedDataNameFormat1': [_mark, _continue],
+        'QualifiedDataNameFormat1': [],
     },
 
     'frame_QualifiedDataNameFormat1': {
-        'DataName': [_mark, _continue],
+        'DataName': [],
+        'QualifiedInData': [],
     },
 
     'frame_ReferenceModifier': {
-        'LPARENCHAR': [_mark, _continue],
-        'RPARENCHAR': [_mark, _continue],
-        'COLONCHAR': [_mark, _continue],
-        'CharacterPosition': [_mark, _mark_next_subnode,_continue],
-        'Length': [_mark, _continue],
+        'LPARENCHAR': [],
+        'RPARENCHAR': [],
+        'COLONCHAR': [],
+        'CharacterPosition': [_mark_next_subnode],
+        'Length': [],
     },
 
     'frame_CharacterPosition': {
-        'ArithmeticExpression': [_mark, _continue],
+        'ArithmeticExpression': [],
     },
 
     'frame_Length': {
-        'ArithmeticExpression': [_mark, _continue],
+        'ArithmeticExpression': [],
+    },
+
+    'frame_SectionName': {
+        'CobolWord': [],
+        'IntegerLiteral': [],
+    },
+
+    'frame_ProcedureName': {
+        'ParagraphName': [],
+        'InSection': [],
+        'SectionName': [],
     },
 
     'frame_ParagraphName': {
-        'CobolWord': [_mark, _continue],
-        'IntegerLiteral': [_mark, _continue],
+        'CobolWord': [],
+        'IntegerLiteral': [],
     },
 
     'frame_DataName': {
-        'CobolWord': [_mark, _continue],
+        'CobolWord': [],
     },
 
     'frame_CobolWord': {
-        'IDENTIFIER': [_mark, _mark_hidden_subnodes, _continue],
+        'IDENTIFIER': [],
     },
 
     'frame_Literal': {
-        'NumericLiteral': [_mark, _continue],
-        'NONNUMERICLITERAL': [_mark, _mark_hidden_subnodes, _continue],
+        'NumericLiteral': [],
+        'NONNUMERICLITERAL': [],
     },
 
     'frame_NumericLiteral': {
-        'IntegerLiteral': [_mark, _continue],
+        'IntegerLiteral': [],
     },
 
     'frame_IntegerLiteral': {
-        'INTEGERLITERAL': [_mark, _mark_hidden_subnodes, _continue],
+        'INTEGERLITERAL': [],
     },
 
 }
@@ -360,15 +606,21 @@ def pre_assemble(node, basket):
 
             for sname, op in snodes.items():
 
+                op.insert(0, _mark)
+                op.insert(0, _mark_hidden_subnodes)
+
                 for task in scan_tasks:
                     analyzer_name = "%s_%s_%s"%(task, pname, sname)
                     if analyzer_name in globals():
                         op.insert(0, globals()[analyzer_name])
 
+                op.append(_continue)
+
                 if sname.isupper():
                     subops[node.tokenmap[sname]]= op
                 else:
                     subops[sname]= op
+
 
         reg_scan(scan_type, scan_tasks, ops, hidden_task)
 
@@ -399,6 +651,8 @@ def post_assemble(node, basket):
 
 
     dirtype, dirattrs, dirbegin, dirend = node.root.kcobol_directive
+    _upward_mark(dirbegin, basket)
+    _upward_mark(dirend, basket)
 
     assert dirtype == "extract"
 

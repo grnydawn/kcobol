@@ -18,6 +18,9 @@ from .exception import UsageError
 
 KCOBOL_CHARSET = 'utf-8'
 
+re_ws = r"[ \t\f;]*"
+re_dotfs = r"(\.(\r|\n|\f|\t| )+|\.)"
+
 #logger = logging.getLogger('kcobol')
 
 def exit(exitno=0, msg="", usage=False):

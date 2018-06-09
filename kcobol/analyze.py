@@ -4,6 +4,8 @@ from __future__ import (absolute_import, division,
 from builtins import *
 from collections import OrderedDict
 
+import logging
+
 from .scan import _debug, _break, _continue, reg_scan, has_scan, push_scan, pop_scan
 from .exception import AnalyzeError
 from .util import exit
@@ -19,7 +21,7 @@ scan_tasks = (
 # ??? How to handle order of Entries with different levels???
 
 _namespace_nodes = {
-    "ProgramUnit": lambda n: n.compilationunit_node,
+    "ProgramUnit": lambda n: n.rununit_node,
     "ProcedureSection": lambda n: n.program_node,
     "Paragraph": lambda n: n.program_node,
     "DataDescriptionEntryFormat1": lambda n: n.program_node,
@@ -51,6 +53,20 @@ def _reg_name(node, path, attrs):
     namespace_node = _namespace_nodes[node.name](node)
     namespace_node.add_name(attrs['name'].text, attrs['name'], node)
 
+    logging.info('"%s(%s)" is saved in a namespace of %s'%(
+        attrs['name'].text, node.name, namespace_node.name))
+
+def _reg_rununit_name(node, path, attrs):
+
+    if 'name' not in attrs:
+        exit(exitno=1, msg='_reg_rununit_name at "%s": "name" key does not exist.'%node.name)
+
+    namespace_node = _namespace_nodes[node.name](node)
+    namespace_node.add_name(attrs['name'].text, attrs['name'], node)
+
+    logging.info('"%s(%s)" is saved in a namespace of %s'%(
+        attrs['name'].text, node.name, namespace_node.name))
+
 def _push_name(node, path, attrs):
 
     if 'name' in attrs:
@@ -73,14 +89,6 @@ def _push_start(node, path, attrs):
         exit(exitno=1, msg='_push_start: "start" key already exists.')
 
     attrs['start'] = path[0].start
-
-def _collect_goback(node, path, attrs):
-    curnode = node
-    while curnode is not None:
-        if curnode.name == "Sentence":
-            curnode.goback_stmt = node.uppernode
-            break
-        curnode = curnode.uppernode
 
 # NOTE
 # - collect name at the node that the name refers to: this is required because the referred node will be saved too.
@@ -149,6 +157,11 @@ _operators = {
         'VALUE': [_break ],
     },
 
+    'name_DataValueIntervalFrom': {
+        #'Literal': [_break],
+        'CobolWord': [_push_name, _continue],
+    },
+
     'name_PictureChars': {
         'IDENTIFIER': [_break ],
         'LPARENCHAR': [_break ],
@@ -173,7 +186,6 @@ _operators = {
     },
 
     'name_Statement': {
-        #'GobackStatement': [_collect_goback, _break],
         'GobackStatement': [_break],
     },
 
@@ -185,6 +197,7 @@ _operators = {
 
     'name_CallStatement': {
         'CALL': [_break ],
+        #'Literal': [_break ],
         'END_CALL': [_break ],
     },
 
@@ -272,11 +285,12 @@ _operators = {
 
     'name_MoveToSendingArea': {
         'Identifier': [_break ],
-        'Literal': [_break ],
+        #'Literal': [_break ],
     },
 
     'name_DisplayOperand': {
         'Identifier': [_break ],
+        #'Literal': [_break ],
     },
 
     'name_ProcedureName': {
@@ -346,7 +360,7 @@ _operators = {
     },
 
     'name_ProgramUnit': {
-        'IdentificationDivision': [_reg_name, _break],
+        'IdentificationDivision': [_reg_rununit_name, _break],
     },
 
     'name_Paragraph': {
@@ -460,10 +474,19 @@ def post_analyze(node, basket):
             elif level_num == stack[-1][0]:
                 if len(stack) > 1:
                     stack[-2][1].subentries.append(entry_node)
+
+                    logging.info('"%s(%s...)" is saved as a subentry in "%s(%s...)"'%(
+                        entry_node.name, entry_node.tocobol()[:10],
+                        stack[-2][1].name, stack[-2][1].tocobol()[:10]))
+
                 stack[-1] = (level_num, entry_node)
             else:
                 if not hasattr(stack[-1][1], "subentries"):
                     stack[-1][1].subentries = []
+                logging.info('"%s(%s...)" is saved as a subentry in "%s(%s...)"'%(
+                    entry_node.name, entry_node.tocobol()[:10],
+                    stack[-1][1].name, stack[-1][1].tocobol()[:10]))
+
                 stack[-1][1].subentries.append(entry_node)
                 stack.append((level_num, entry_node))
 

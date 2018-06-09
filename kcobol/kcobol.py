@@ -43,24 +43,28 @@ def on_extract_command(opts):
         config[u'opts/extract/%s'%k] = v
 
     # read target source file
-    tree = read_target()
+    root, compunit = read_target()
 
     # initialize search library
-    initialize_scan(tree)
+    initialize_scan(root)
 
     # collect kernel statements
-    tree.setattr_shared('kernel_index', -1)
-    tree.kcobol_group = []
-    tree.kernel_group = []
-    tree.kernel_flag = False
-    tree.search(collect_kernel_statements, DFS_LF)
-    del tree.kernel_flag
+    logging.debug('Collecting kernel statements')
+
+    root.setattr_shared('kernel_index', -1)
+    root.kcobol_group = []
+    root.kernel_group = []
+    root.kernel_flag = False
+    root.search(collect_kernel_statements, DFS_LF)
+    del root.kernel_flag
 
     # repeat per each kernel group
-    for kidx in range(len(tree.kernel_group)):
+    for kidx in range(len(root.kernel_group)):
+
+        logging.debug('==== KERNEL %d ===='%kidx)
 
         # clone parsed tree
-        kernel_tree = tree.clone()
+        kernel_tree = root.clone()
 
         # setup kernel values
         kcobol_directive = kernel_tree.kcobol_group[kidx]
@@ -77,6 +81,7 @@ def on_extract_command(opts):
 
         # analyze kernel tree
         # 1. construct namespaces
+        logging.debug('Analyzing kernel')
         basket = {}
         #kernel_tree.search(callsite, DFS_LF, basket=basket, premove=pre_callsite,
         # TODO: use top node instead of kernel tree
@@ -85,7 +90,8 @@ def on_extract_command(opts):
 
         # resolve kernel nodes
         # 1. find resolving terminal nodes
-        basket = {'unknowns': set(kernel_nodes), 'nodes': set()}
+        logging.debug('Resolving kernel')
+        basket = {'unknowns': set(kernel_nodes), 'nodes': set(), 'unresolved': set()}
         pre_resolve(kernel_nodes[0], basket)
         while basket['unknowns']:
             knode = basket['unknowns'].pop()
@@ -108,6 +114,7 @@ def on_extract_command(opts):
 
         # assemble kernel nodes
         # 1. reconstruct a minimum cobol ast that contains kernel nodes
+        logging.debug('Assembling kernel')
         basket = {}
         pre_assemble(kernel_nodes[0], basket)
         for knode in kernel_nodes:
@@ -125,6 +132,7 @@ def on_extract_command(opts):
             os.mkdir(outdir)
         outpath = os.path.join(outdir, outfile)
 
+        logging.debug('Writing kernel')
         with open(outpath, 'w') as f:
             f.write(kernel_tree.tocobol(revise=remove_eof))
 

@@ -6,10 +6,16 @@ from __future__ import (absolute_import, division,
 from builtins import *
 from collections import OrderedDict
 
+import logging
+import pickle
+
 from stemtree import DFS_LF
+from stemcobol import parse, EOF
 from .scan import _debug, _break, _continue, upward_scan, reg_scan, has_scan, push_scan, pop_scan
 from .collect import pre_collect, post_collect
 from .exception import ResolveError
+from .reader import parse_source
+from .config import config, get_source_by_program_id
 from .util import exit
 
 # NOTE: resolve if name is definite
@@ -32,44 +38,81 @@ def hidden_task(node, basket):
 def _push_name(node, path, attrs):
     if 'name' in attrs:
         exit(exitno=1, msg='_push_name: "name" key already exists.')
-    attrs['name'] = path[0]
+    attrs['name'] = path[0].text
 
-def _resolve_at_rununit_node(node, lowest_name, upper_names):
-    import pdb; pdb.set_trace()
-    pass
+def _push_string_name(node, path, attrs):
+    if 'name' in attrs:
+        exit(exitno=1, msg='_push_string_name: "name" key already exists.')
+    attrs['name'] = path[0].text[1:-1]
 
-def _resolve_at_program_node(node, lowest_name, upper_names):
+def _resolve_at_rununit_node(node, name, upper_names):
 
-    if lowest_name.text in node.program_node.namespace:
-        res_node = node.program_node.namespace[lowest_name.text]
+    if name in node.rununit_node.namespace:
+        res_node = node.rununit_node.namespace[name]
+        # TODO: check if handlling upper_names is needed
         #if len(upper_names) > 0:
         #    import pdb; pdb.set_trace()
         return res_node
-    else:
-        import pdb; pdb.set_trace()
 
-def _resolve_node(node, namepath, attrs):
+    srcpath, compilerpath = get_source_by_program_id(name)
+    if srcpath is not None and compilerpath is not None:
+        with open(compilerpath, 'rb') as f:
+            compiler = pickle.load(f)
+            #source = get_source(srcpath, compiler)
+            root = parse_source(srcpath, compiler)
+            #root = parse(srcpath, source.format, source.standard, config['opts/main/output'], root=node.root)
+            # TODO: find programid terminal node and program node to return
+            #import pdb; pdb.set_trace()
+    return None, None
 
-    lowest_name = namepath[0]
+def _resolve_at_program_node(node, name, upper_names):
+
+    if name in node.program_node.namespace:
+        res_node = node.program_node.namespace[name]
+        # TODO: check if handlling upper_names is needed
+        #if len(upper_names) > 0:
+        #    import pdb; pdb.set_trace()
+        return res_node
+
+    return None, None
+
+def _resolve_node(node, name, namepath, attrs):
 
     # try to resolve at program nodes
-    res_terminal, res_node = _resolve_at_program_node(node, lowest_name, namepath[1:])
+    res_terminal, res_node = _resolve_at_program_node(node, name, namepath[1:])
 
     # try to resolve at rununit node
-    if res_terminal is None:
-        res_terminal, res_node = _resolve_at_rununit_node(node, lowest_name, namepath[1:])
+    if res_terminal is None or res_node is None:
+        res_terminal, res_node = _resolve_at_rununit_node(node, name, namepath[1:])
 
-    if res_terminal is None:
-        node.rununit_node.unresolved.add(namepath)
-    elif res_node is not None:
+    if res_terminal is None or res_node is None:
+
+        logging.info("UNRES: "+name)
+        attrs["unresolved"].add(tuple(namepath))
+
+    else:
+
         attrs['nodes'].add(res_terminal)
+        logging.info('RES: "%s" is resolved by "%s(%s...)"'%(name, res_node.name, res_node.tocobol()[:10]))
+
         if res_node not in _resolved:
-            collect_basket = {}
-            res_node.search(upward_scan, DFS_LF, basket=collect_basket, premove=pre_collect,
-            postmove=post_collect, stopnode=res_node)
-            _resolved[res_node] = None
-            for n in collect_basket['names']:
-                attrs['unknowns'].add(n)
+
+            entries = [res_node]
+
+            if hasattr(res_node, "subentries"):
+                entries.extend(res_node.subentries)
+
+            for entry in entries:
+                _resolved[entry] = None
+
+                collect_basket = {"unknowns": set(), "nodes": set()}
+                entry.search(upward_scan, DFS_LF, basket=collect_basket, premove=pre_collect,
+                postmove=post_collect, stopnode=entry.uppernode)
+
+                attrs['nodes'] |= collect_basket["nodes"]
+                attrs['unknowns'] |= collect_basket["unknowns"]
+
+            #import pdb; pdb.set_trace()
 
 # handling qualified data name formats
 def _save_or_resolve_name(node, path, attrs):
@@ -86,7 +129,7 @@ def _save_or_resolve_name(node, path, attrs):
     if any(n is None for n in _cache[nid]):
         return
     else:
-        _resolve_node(node, _cache[nid], attrs)
+        _resolve_node(node, _cache[nid][0], _cache[nid], attrs)
         del _cache[nid]
 
 def _resolve_name(node, path, attrs):
@@ -94,7 +137,7 @@ def _resolve_name(node, path, attrs):
     if 'name' not in attrs:
         exit(exitno=1, msg='_resolve_name at "%s": "name" key does not exists.'%node.name)
 
-    _resolve_node(node, [attrs['name']], attrs)
+    _resolve_node(node, attrs['name'], [attrs['name']], attrs)
 
 _operators = {
 
@@ -202,6 +245,7 @@ _operators = {
 
     'resolve_CallStatement': {
         'CALL': [_break],
+        'Literal': [_push_string_name, _resolve_name, _break],
     },
 
     'resolve_StopStatement': {
@@ -371,7 +415,7 @@ _operators = {
     },
 
     'resolve_Literal': {
-        'NONNUMERICLITERAL': [_break],
+        'NONNUMERICLITERAL': [_continue],
     },
 
     'resolve_IntegerLiteral': {

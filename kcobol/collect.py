@@ -4,6 +4,8 @@ from __future__ import (absolute_import, division,
 from builtins import *
 from collections import OrderedDict
 
+import logging
+
 from .scan import _debug, _break, _continue, reg_scan, has_scan, push_scan, pop_scan
 from .exception import AnalyzeError
 from .util import exit
@@ -30,8 +32,18 @@ def hidden_task(node, basket):
 #    else:
 #        node.program_node.add_name(attrs['name'])
 
+def _collect_node(node, path, attrs):
+
+    logging.info('"%s" is collected as a kernel node at "%s"'%(path[0].text, node.name))
+
+    attrs['nodes'].add(path[0])
+
+
 def _collect_name(node, path, attrs):
-    attrs['names'].append(path[0])
+
+    logging.info('"%s" is collected as an unknown node at "%s"'%(path[0].text, node.name))
+
+    attrs['unknowns'].add(path[0])
 
 #def _collect_goback(node, path, attrs):
 #    curnode = node
@@ -47,54 +59,54 @@ def _collect_name(node, path, attrs):
 
 _operators = {
 
-#    #### IdentificationDivision ####
-#
-#    'collect_IdentificationDivision': {
-#        'IDENTIFICATION': [_break],
-##        'ProgramIdParagraph': _continue,
-#    },
-#
-#    'collect_ProgramIdParagraph': {
-#        'PROGRAM_ID': [_break],
-#        'ProgramName': [_reg_name, _break],
-#    },
-#
-#    'collect_ProgramName': {
-#        'CobolWord': [_collect_name, _continue],
-#    },
-#
-#    #### EnvironmentDivision ####
-#
-#    'collect_EnvironmentDivision': {
-#        'ENVIRONMENT': [_break],
-#    },
-#
-#    #### DataDivision ####
-#
-#    'collect_DataDivision': {
-#        'DATA': [_break],
-#    },
-#
-#    'collect_WorkingStorageSection': {
-#        'WORKING_STORAGE': [_break],
-#    },
+###    #### IdentificationDivision ####
+###
+###    'collect_IdentificationDivision': {
+###        'IDENTIFICATION': [_break],
+####        'ProgramIdParagraph': _continue,
+###    },
+###
+###    'collect_ProgramIdParagraph': {
+###        'PROGRAM_ID': [_break],
+###        'ProgramName': [_reg_name, _break],
+###    },
+###
+###    'collect_ProgramName': {
+###        'CobolWord': [_collect_name, _continue],
+###    },
+###
+###    #### EnvironmentDivision ####
+###
+###    'collect_EnvironmentDivision': {
+###        'ENVIRONMENT': [_break],
+###    },
+###
+###    #### DataDivision ####
+###
+###    'collect_DataDivision': {
+###        'DATA': [_break],
+###    },
+###
+###    'collect_WorkingStorageSection': {
+###        'WORKING_STORAGE': [_break],
+###    },
 
     'collect_DataDescriptionEntryFormat1': {
-        'INTEGERLITERAL': [_break],
+        'INTEGERLITERAL': [_collect_node, _break],
         'DataName': [_break],
     },
 
     'collect_DataOccursClause': {
-        'OCCURS': [_break],
+        'OCCURS': [_collect_node, _break],
     },
 
     'collect_DataRedefinesClause': {
-        'REDEFINES': [_break],
-        'DataName': [_collect_name, _break],
+        'REDEFINES': [_collect_node, _break],
+##        'DataName': [_collect_name, _break],
     },
 
     'collect_DataUsageClause': {
-        'COMP_5': [_break],
+        'COMP_5': [_collect_node, _break],
     },
 
     'collect_DataName': {
@@ -102,26 +114,27 @@ _operators = {
     },
 
     'collect_DataPictureClause': {
-        'PIC': [_break ],
+        'PIC': [_collect_node, _break ],
     },
 
     'collect_DataValueClause': {
-        'VALUE': [_break ],
+        'VALUE': [_collect_node, _break ],
     },
 
     'collect_PictureChars': {
-        'IDENTIFIER': [_break ],
-        'LPARENCHAR': [_break ],
-        'RPARENCHAR': [_break ],
+        'IDENTIFIER': [_collect_node, _break ],
+        'LPARENCHAR': [_collect_node, _break ],
+        'RPARENCHAR': [_collect_node, _break ],
     },
 
     #### ProcedureDivision ####
 
     'collect_ProcedureDivision': {
-        'PROCEDURE': [_break ],
+        'PROCEDURE': [_collect_node, _break ],
     },
 
     'collect_ProcedureSection': {
+#        'ProcedureSectionHeader': [_debug ],
     },
 
     'collect_ProcedureSectionHeader': {
@@ -129,103 +142,103 @@ _operators = {
     },
 
     'collect_InitializeStatement': {
-        'INITIALIZE': [_break ],
-        'Identifier': [_collect_name, _break ],
-##        'InitializeReplacingPhrase': [_break ],
+        'INITIALIZE': [_collect_node, _break ],
+#        'Identifier': [_collect_name, _break ],
+#        'InitializeReplacingPhrase': [_break ],
     },
 
     'collect_CallStatement': {
-        'CALL': [_break ],
-        'END_CALL': [_break ],
+        'CALL': [_collect_node, _break ],
+        'END_CALL': [_collect_node, _break ],
     },
 
     'collect_MoveStatement': {
-        'MOVE': [_break ],
+        'MOVE': [_collect_node, _break ],
     },
 
     'collect_MoveToStatement': {
-        'TO': [_break ],
-        'Identifier': [_collect_name, _break ],
+        'TO': [_collect_node, _break ],
+#        'Identifier': [_collect_name, _break ],
     },
 
     'collect_PerformStatement': {
-        'PERFORM': [_break ],
+        'PERFORM': [_collect_node, _break ],
     },
 
     'collect_DisplayStatement': {
-        'DISPLAY': [_break ],
+        'DISPLAY': [_collect_node, _break ],
     },
 
     'collect_DivideStatement': {
-        'DIVIDE': [_break ],
-        'END_DIVIDE': [_break ],
-        'Identifier': [_collect_name, _break ],
+        'DIVIDE': [_collect_node, _break ],
+        'END_DIVIDE': [_collect_node, _break ],
+#        'Identifier': [_collect_name, _break ],
     },
 
     'collect_AddStatement': {
-        'ADD': [_break ],
-        'END_ADD': [_break ],
+        'ADD': [_collect_node, _break ],
+        'END_ADD': [_collect_node, _break ],
     },
 
     'collect_AddToStatement': {
-        'TO': [_break ],
+        'TO': [_collect_node, _break ],
     },
 
     'collect_DivideByGivingStatement': {
-        'BY': [_break ],
+        'BY': [_collect_node, _break ],
     },
 
     'collect_GobackStatement': {
-        'GOBACK': [_break ],
+        'GOBACK': [_collect_node, _break ],
     },
 
     'collect_PerformProcedureStatement': {
-        'THROUGH': [_break ],
-        'THRU': [_break ],
+        'THROUGH': [_collect_node, _break ],
+        'THRU': [_collect_node, _break ],
         'ProcedureName': [_collect_name, _break ],
-##        'PerformType': [_break ],
+###        'PerformType': [_break ],
     },
 
     'collect_PerformInlineStatement': {
-        'END_PERFORM': [_break ],
+        'END_PERFORM': [_collect_node, _break ],
     },
 
     'collect_StopStatement': {
-        'STOP': [_break ],
-        'RUN': [_break ],
+        'STOP': [_collect_node, _break ],
+        'RUN': [_collect_node, _break ],
     },
 
     'collect_ExitStatement': {
-        'EXIT': [_break ],
-        'PROGRAM': [_break ],
+        'EXIT': [_collect_node, _break ],
+        'PROGRAM': [_collect_node, _break ],
     },
 
     'collect_DivideGivingPhrase': {
-        'GIVING': [_break ],
+        'GIVING': [_collect_node, _break ],
     },
 
     'collect_DivideGiving': {
-        'ROUNDED': [_break ],
-        'Identifier': [_collect_name, _break ],
+        'ROUNDED': [_collect_node, _break ],
+#        'Identifier': [_collect_name, _break ],
     },
 
     'collect_DivideRemainder': {
-        'REMAINDER': [_break ],
-        'Identifier': [_collect_name, _break ],
+        'REMAINDER': [_collect_node, _break ],
+#        'Identifier': [_collect_name, _break ],
     },
 
     'collect_AddTo': {
-        'ROUNDED': [_break ],
-        'Identifier': [_collect_name, _break ],
+        'ROUNDED': [_collect_node, _break ],
+#        'Identifier': [_collect_name, _break ],
     },
 
     'collect_MoveToSendingArea': {
-        'Identifier': [_collect_name, _break ],
-#        'Literal': [_break ],
+#        'Identifier': [_collect_name, _break ],
+##        'Literal': [_break ],
     },
 
     'collect_DisplayOperand': {
-        'Identifier': [_collect_name, _break],
+#        'Identifier': [_collect_name, _break],
     },
 
     'collect_ProcedureName': {
@@ -233,56 +246,56 @@ _operators = {
     },
 
     'collect_QualifiedDataName': {
-        'QualifiedDataNameFormat1': [_continue ],
+##        'QualifiedDataNameFormat1': [_continue ],
     },
 
     'collect_QualifiedDataNameFormat1': {
-        'DataName': [_continue ],
-#        'QualifiedInData': [_break ],
+        'DataName': [_collect_name, _break ],
+##        'QualifiedInData': [_break ],
     },
 
-###    'collect_QualifiedInData': {
-###        'InData': [_break ],
-###        'InTable': [_break ],
-###    },
+    'collect_QualifiedInData': {
+####        'InData': [_break ],
+####        'InTable': [_break ],
+    },
 
     'collect_InData': {
-        'IN': [_break ],
-        'OF': [_break ],
-        'DataName': [_break ], # TODO: check if _break is valid
+        'IN': [_collect_node, _break ],
+        'OF': [_collect_node, _break ],
+#        'DataName': [_break ], # TODO: assumes that first name is a registered resource name
     },
 
     'collect_PerformVaryingClause': {
-        'VARYING': [_break ],
+        'VARYING': [_collect_node, _break ],
     },
 
     'collect_CallUsingPhrase': {
-        'USING': [_break ],
+        'USING': [_collect_node, _break ],
     },
 
     'collect_CallByReference': {
-        'ADDRESS': [_break ],
-        'OF': [_break ],
-        'INTEGER': [_break ],
-        'STRING': [_break ],
-        'OMITTED': [_break ],
-        'Identifier': [_break ],
+        'ADDRESS': [_collect_node, _break ],
+        'OF': [_collect_node, _break ],
+        'INTEGER': [_collect_node, _break ],
+        'STRING': [_collect_node, _break ],
+        'OMITTED': [_collect_node, _break ],
+        'Identifier': [_collect_node, _break ],
     },
 
-    'collect_PerformVaryingPhrase': {
-        'Identifier': [_collect_name, _break],
-    },
+#    'collect_PerformVaryingPhrase': {
+#        'Identifier': [_collect_name, _break],
+#    },
 
     'collect_PerformFrom': {
-        'FROM': [_break ],
+        'FROM': [_collect_node, _break ],
     },
 
     'collect_PerformBy': {
-        'BY': [_break ],
+        'BY': [_collect_node, _break ],
     },
 
     'collect_PerformUntil': {
-        'UNTIL': [_break ],
+        'UNTIL': [_collect_node, _break ],
     },
 
     'collect_ParagraphName': {
@@ -294,101 +307,101 @@ _operators = {
     'collect_RunUnit': {
     },
 
-##    'collect_ProgramUnit': {
-###        'IdentificationDivision': [_reg_name, _break],
-##    },
+###    'collect_ProgramUnit': {
+####        'IdentificationDivision': [_reg_name, _break],
+###    },
 
     'collect_Sentence': {
     },
 
-#    'collect_Statement': {
-#    },
+    'collect_Statement': {
+    },
 
     'collect_Paragraph': {
         'ParagraphName': [_break],
     },
 
-    'collect_RelationArithmeticComparison': {
-        'ArithmeticExpression': [_collect_name, _break],
-    },
-
+#    'collect_RelationArithmeticComparison': {
+##        'ArithmeticExpression': [_collect_name, _break],
+##    },
+##
 
     'collect_RelationalOperator': {
-        'IS': [_break ],
-        'ARE': [_break ],
-        'NOT': [_break ],
-        'GREATER': [_break ],
-        'THAN': [_break ],
-        'MORETHANCHAR': [_break ],
-        'LESS': [_break ],
-        'LESSTHANCHAR': [_break ],
-        'EQUAL': [_break ],
-        'TO': [_break ],
-        'EQUALCHAR': [_break ],
-        'NOTEQUALCHAR': [_break ],
-        'MORETHANOREQUAL': [_break ],
-        'OR': [_break ],
-        'LESSTHANOREQUAL': [_break ],
+        'IS': [_collect_node, _break ],
+        'ARE': [_collect_node, _break ],
+        'NOT': [_collect_node, _break ],
+        'GREATER': [_collect_node, _break ],
+        'THAN': [_collect_node, _break ],
+        'MORETHANCHAR': [_collect_node, _break ],
+        'LESS': [_collect_node, _break ],
+        'LESSTHANCHAR': [_collect_node, _break ],
+        'EQUAL': [_collect_node, _break ],
+        'TO': [_collect_node, _break ],
+        'EQUALCHAR': [_collect_node, _break ],
+        'NOTEQUALCHAR': [_collect_node, _break ],
+        'MORETHANOREQUAL': [_collect_node, _break ],
+        'OR': [_collect_node, _break ],
+        'LESSTHANOREQUAL': [_collect_node, _break ],
     },
 
 
-    'collect_ArithmeticExpression': {
-        'MultDivs': [_continue],
-    },
-
-    'collect_MultDivs': {
-        'Powers': [_continue],
-    },
-
-    'collect_Powers': {
-        'Basis': [_continue],
-    },
-
-    'collect_Basis': {
-        'Identifier': [_continue],
-    },
-
-    'collect_Identifier': {
-        'QualifiedDataName': [_continue ],
-        'TableCall': [_continue ],
-    },
-
+##    'collect_ArithmeticExpression': {
+##        'MultDivs': [_continue],
+##    },
+##
+##    'collect_MultDivs': {
+##        'Powers': [_continue],
+##    },
+##
+##    'collect_Powers': {
+##        'Basis': [_continue],
+##    },
+##
+##    'collect_Basis': {
+##        'Identifier': [_continue],
+##    },
+##
+##    'collect_Identifier': {
+##        'QualifiedDataName': [_continue ],
+##        'TableCall': [_continue ],
+##    },
+#
     'collect_TableCall': {
-        'QualifiedDataName': [_continue],
-        'LPARENCHAR': [_break ],
-        'RPARENCHAR': [_break ],
+#        'QualifiedDataName': [_continue],
+        'LPARENCHAR': [_collect_node, _break ],
+        'RPARENCHAR': [_collect_node, _break ],
     },
 
     'collect_SectionName': {
         'CobolWord': [_continue],
     },
 
-    'collect_Subscript': {
-        'ALL': [_break ],
-        'QualifiedDataName': [_collect_name, _break ],
-    },
-
-
-    'collect_CharacterPosition': {
-        'ArithmeticExpression': [_collect_name, _break],
-    },
+#    'collect_Subscript': {
+#        'ALL': [_break ],
+#        'QualifiedDataName': [_collect_name, _break ],
+#    },
+#
+#
+#    'collect_CharacterPosition': {
+#        'ArithmeticExpression': [_collect_name, _break],
+#    },
 
     'collect_ReferenceModifier': {
-        'LPARENCHAR': [_break ],
-        'RPARENCHAR': [_break ],
-        'COLONCHAR': [_break ],
+        'LPARENCHAR': [_collect_node, _break ],
+        'RPARENCHAR': [_collect_node, _break ],
+        'COLONCHAR': [_collect_node, _break ],
     },
 
     'collect_Literal': {
-        'NONNUMERICLITERAL': [_break ],
+        'NONNUMERICLITERAL': [_collect_node, _break ],
     },
 
     'collect_IntegerLiteral': {
-        'INTEGERLITERAL': [_break ],
+        'INTEGERLITERAL': [_collect_node, _break ],
     },
 
     'collect_CobolWord': {
-        'IDENTIFIER': [_continue ]
+        'IDENTIFIER': [_collect_node, _continue ]
     },
 }
 
@@ -404,10 +417,14 @@ def pre_collect(node, basket):
 
             for sname, op in snodes.items():
 
+                #op.insert(0, _collect_node)
+
                 for task in scan_tasks:
                     collect_name = "%s_%s_%s"%(task, pname, sname)
                     if collect_name in globals():
                         op.insert(0, globals()[collect_name])
+
+                #op.append(_break)
 
                 if sname.isupper():
                     subops[node.tokenmap[sname]]= op
@@ -417,7 +434,6 @@ def pre_collect(node, basket):
         reg_scan(scan_type, scan_tasks, ops, hidden_task)
 
     push_scan(scan_type)
-    basket['names'] = []
 
     return node
 

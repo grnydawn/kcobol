@@ -89,3 +89,13 @@ def read_config():
     else:
         write_config(app_dir)
 
+
+def get_source_by_program_id(pid):
+
+    # get source path
+    path = config[u"prjconfig/source/%s"%pid]
+
+    # compiler
+    compiler = config[u"prjconfig/build/compiler/%s"%path]
+
+    return path, compiler
